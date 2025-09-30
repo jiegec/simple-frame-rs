@@ -551,7 +551,8 @@ impl<'a> SFrameSection<'a> {
             self.flags
                 .iter_names()
                 .map(|(name, _flag)| name)
-                .collect::<Vec<_>>().join(" | ")
+                .collect::<Vec<_>>()
+                .join(" | ")
         )?;
         if self.cfa_fixed_fp_offset != 0 {
             writeln!(
@@ -574,7 +575,7 @@ impl<'a> SFrameSection<'a> {
         writeln!(&mut s)?;
         for i in 0..self.num_fdes {
             let fde = self.get_fde(i)?.unwrap();
-            let pc = fde.get_pc(&self);
+            let pc = fde.get_pc(self);
             writeln!(
                 &mut s,
                 "  func idx [{i}]: pc = 0x{:x}, size = {} bytes",
@@ -589,15 +590,15 @@ impl<'a> SFrameSection<'a> {
                     writeln!(&mut s, "  STARTPC[m]        CFA      FP     RA")?;
                 }
             }
-            let mut iter = fde.iter_fre(&self);
+            let mut iter = fde.iter_fre(self);
             while let Some(fre) = iter.next()? {
                 let start_pc = match fde.func_info.get_fde_type()? {
                     SFrameFDEType::PCInc => pc + fre.start_address.get() as u64,
                     SFrameFDEType::PCMask => fre.start_address.get() as u64,
                 };
-                let rest;
-                match self.abi {
+                let rest = match self.abi {
                     SFrameABI::AMD64LittleEndian => {
+                        // https://sourceware.org/binutils/docs/sframe-spec.html#AMD64
                         let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
                             "fp"
                         } else {
@@ -606,13 +607,31 @@ impl<'a> SFrameSection<'a> {
                         let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
                         let fp = match fre.stack_offsets.get(1) {
                             Some(offset) => format!("c{:+}", offset.get()),
-                            None => format!("u"), // without offset
+                            None => "u".to_string(), // without offset
                         };
                         let ra = "f"; // fixed
-                        rest = format!("{cfa:8} {fp:6} {ra}");
+                        format!("{cfa:8} {fp:6} {ra}")
+                    }
+                    SFrameABI::AArch64LittleEndian => {
+                        // https://sourceware.org/binutils/docs/sframe-spec.html#AArch64
+                        let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                            "fp"
+                        } else {
+                            "sp"
+                        };
+                        let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
+                        let fp = match fre.stack_offsets.get(1) {
+                            Some(offset) => format!("c{:+}", offset.get()),
+                            None => "u".to_string(), // without offset
+                        };
+                        let ra = match fre.stack_offsets.get(2) {
+                            Some(offset) => format!("c{:+}", offset.get()),
+                            None => "u".to_string(), // without offset
+                        };
+                        format!("{cfa:8} {fp:6} {ra}")
                     }
                     _ => todo!(),
-                }
+                };
                 writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
             }
             writeln!(&mut s,)?;
