@@ -10,7 +10,7 @@ struct Testcase {
 }
 
 fn main() -> anyhow::Result<()> {
-    for arg in std::env::args() {
+    for arg in std::env::args().skip(1) {
         let path = PathBuf::from(&arg);
         let data = std::fs::read(&arg)?;
         let file = object::File::parse(&*data)?;
