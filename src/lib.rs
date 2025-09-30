@@ -10,6 +10,23 @@ use core::fmt::Write;
 use fallible_iterator::FallibleIterator;
 use thiserror::Error;
 
+macro_rules! read_binary {
+    ($data: expr, $le: expr, $ty: ident, $offset: expr) => {{
+        let data_offset = $offset;
+        let mut data_bytes: [u8; core::mem::size_of::<$ty>()] = [0; core::mem::size_of::<$ty>()];
+        data_bytes.copy_from_slice(&$data[data_offset..data_offset + core::mem::size_of::<$ty>()]);
+        if $le {
+            $ty::from_le_bytes(data_bytes)
+        } else {
+            $ty::from_be_bytes(data_bytes)
+        }
+    }};
+}
+
+macro_rules! read_struct {
+    ($struct: ident, $data: expr, $le: expr, $x: ident, $ty: ident) => {{ read_binary!($data, $le, $ty, core::mem::offset_of!($struct, $x)) }};
+}
+
 /// Result type for the crate
 pub type SFrameResult<T> = core::result::Result<T, SFrameError>;
 
@@ -349,7 +366,24 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
                 SFrameFREStartAddress::U8(self.section.data[offset]),
                 SFrameFREInfo(self.section.data[offset + 1]),
             ),
-            _ => todo!(),
+            SFrameFREType::Addr1 => (
+                SFrameFREStartAddress::U16(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    u16,
+                    offset
+                )),
+                SFrameFREInfo(self.section.data[offset + 2]),
+            ),
+            SFrameFREType::Addr2 => (
+                SFrameFREStartAddress::U32(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    u32,
+                    offset
+                )),
+                SFrameFREInfo(self.section.data[offset + 4]),
+            ),
         };
 
         let offset_size = info.get_offset_size()?;
@@ -365,7 +399,19 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
                 1 => stack_offsets.push(SFrameFREStackOffset::I8(
                     self.section.data[offset + entry_size + i * offset_size] as i8,
                 )),
-                _ => todo!(),
+                2 => stack_offsets.push(SFrameFREStackOffset::I16(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    i16,
+                    offset + entry_size + i * offset_size
+                ))),
+                4 => stack_offsets.push(SFrameFREStackOffset::I32(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    i32,
+                    offset + entry_size + i * offset_size
+                ))),
+                _ => unreachable!(),
             }
         }
 
@@ -409,31 +455,6 @@ impl SFrameFDE {
 
 /// The magic number for SFrame section: 0xdee2
 const SFRAME_MAGIC: u16 = 0xdee2;
-
-macro_rules! read_4b {
-    ($struct: ident, $data: expr, $le: expr, $x: ident, $ty: ident) => {{
-        let data_offset = core::mem::offset_of!($struct, $x);
-        let mut data_bytes: [u8; 4] = [0; 4];
-        data_bytes.copy_from_slice(&$data[data_offset..data_offset + 4]);
-        if $le {
-            $ty::from_le_bytes(data_bytes)
-        } else {
-            $ty::from_be_bytes(data_bytes)
-        }
-    }};
-}
-
-macro_rules! read_u32 {
-    ($struct: ident, $data: expr, $le: expr, $x: ident) => {
-        read_4b!($struct, $data, $le, $x, u32)
-    };
-}
-
-macro_rules! read_i32 {
-    ($struct: ident, $data: expr, $le: expr, $x: ident) => {
-        read_4b!($struct, $data, $le, $x, i32)
-    };
-}
 
 impl<'a> SFrameSection<'a> {
     /// Parse SFrame section from data
@@ -504,11 +525,11 @@ impl<'a> SFrameSection<'a> {
             cfa_fixed_fp_offset,
             cfa_fixed_ra_offset,
             auxhdr_len,
-            num_fdes: read_u32!(RawSFrameHeader, data, little_endian, num_fdes),
-            num_fres: read_u32!(RawSFrameHeader, data, little_endian, num_fres),
-            fre_len: read_u32!(RawSFrameHeader, data, little_endian, fre_len),
-            fdeoff: read_u32!(RawSFrameHeader, data, little_endian, fdeoff),
-            freoff: read_u32!(RawSFrameHeader, data, little_endian, freoff),
+            num_fdes: read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32),
+            num_fres: read_struct!(RawSFrameHeader, data, little_endian, num_fres, u32),
+            fre_len: read_struct!(RawSFrameHeader, data, little_endian, fre_len, u32),
+            fdeoff: read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32),
+            freoff: read_struct!(RawSFrameHeader, data, little_endian, freoff, u32),
         })
     }
 
@@ -533,29 +554,33 @@ impl<'a> SFrameSection<'a> {
 
         Ok(Some(SFrameFDE {
             offset,
-            func_start_address: read_i32!(
+            func_start_address: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_start_address
+                func_start_address,
+                i32
             ),
-            func_size: read_u32!(
+            func_size: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_size
+                func_size,
+                u32
             ),
-            func_start_fre_off: read_u32!(
+            func_start_fre_off: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_start_fre_off
+                func_start_fre_off,
+                u32
             ),
-            func_num_fres: read_u32!(
+            func_num_fres: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_num_fres
+                func_num_fres,
+                u32
             ),
             func_info: SFrameFDEInfo(
                 self.data[offset + core::mem::offset_of!(RawSFrameFDE, func_info)],
