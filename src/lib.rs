@@ -8,6 +8,7 @@
 use bitflags::bitflags;
 use core::fmt::Write;
 use fallible_iterator::FallibleIterator;
+use std::cmp::Ordering;
 use thiserror::Error;
 
 macro_rules! read_binary {
@@ -701,6 +702,51 @@ impl<'a> SFrameSection<'a> {
         SFrameFDEIterator {
             section: self,
             index: 0,
+        }
+    }
+
+    /// Find FDE entry by pc
+    pub fn find_fde(&self, pc: u64) -> SFrameResult<Option<SFrameFDE>> {
+        if self.flags.contains(SFrameFlags::SFRAME_F_FDE_SORTED) {
+            // binary search
+            // mimic binary_search_by impl from rust std
+            let mut size = self.num_fdes;
+            if size == 0 {
+                return Ok(None);
+            }
+            let mut base = 0;
+
+            while size > 1 {
+                let half = size / 2;
+                let mid = base + half;
+
+                let cmp = self.get_fde(mid)?.unwrap().get_pc(self).cmp(&pc);
+                if cmp != Ordering::Greater {
+                    base = mid;
+                }
+                size -= half;
+            }
+
+            let base_fde = self.get_fde(base)?.unwrap();
+            let base_pc = base_fde.get_pc(self);
+            let cmp = base_pc.cmp(&pc);
+            match cmp {
+                Ordering::Equal | Ordering::Less if pc < base_pc + base_fde.func_size as u64 => {
+                    Ok(Some(base_fde))
+                }
+                _ => Ok(None),
+            }
+        } else {
+            // linear scan
+            let mut iter = self.iter_fde();
+            while let Some(fde) = iter.next()? {
+                let start = fde.get_pc(self);
+                let end = start + fde.func_size as u64;
+                if start <= pc && pc < end {
+                    return Ok(Some(fde));
+                }
+            }
+            Ok(None)
         }
     }
 

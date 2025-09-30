@@ -46,55 +46,46 @@ fn main() -> anyhow::Result<()> {
 
                     let mut found = false;
                     // find fre by pc
-                    let mut iter = parsed.iter_fde();
-                    'outer: while let Some(fde) = iter.next()? {
-                        let start = fde.get_pc(&parsed);
-                        let end = start + fde.func_size as u64;
-                        // TODO: use binary search
-                        if start <= pc && pc < end {
-                            // found fde
-                            let offset = pc - start;
+                    if let Some(fde) = parsed.find_fde(pc)? {
+                        // found fde
+                        let offset = pc - fde.get_pc(&parsed);
 
-                            // find fre
-                            let mut iter = fde.iter_fre(&parsed);
-                            let mut last: Option<SFrameFRE> = None;
-                            while let Some(fre) = iter.next()? {
-                                if fre.start_address.get() as u64 > offset {
-                                    // last is the matching one
-                                    let fre = last.unwrap();
-                                    let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
-                                        fp
-                                    } else {
-                                        sp
-                                    };
-                                    let cfa = (base_reg as i64 + fre.stack_offsets[0].get() as i64)
-                                        as u64;
+                        // find fre
+                        let mut iter = fde.iter_fre(&parsed);
+                        let mut last: Option<SFrameFRE> = None;
+                        while let Some(fre) = iter.next()? {
+                            if fre.start_address.get() as u64 > offset {
+                                // last is the matching one
+                                let fre = last.unwrap();
+                                let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                                    fp
+                                } else {
+                                    sp
+                                };
+                                let cfa =
+                                    (base_reg as i64 + fre.stack_offsets[0].get() as i64) as u64;
 
-                                    // new sp
-                                    sp = cfa;
+                                // new sp
+                                sp = cfa;
 
-                                    // amd64: fixed ra offset
-                                    let ra_addr = (cfa as i64
-                                        + parsed.get_cfa_fixed_ra_offset() as i64)
-                                        as u64;
-                                    // new pc
-                                    pc = unsafe {
-                                        libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0)
+                                // amd64: fixed ra offset
+                                let ra_addr =
+                                    (cfa as i64 + parsed.get_cfa_fixed_ra_offset() as i64) as u64;
+                                // new pc
+                                pc = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0) }
+                                    as u64;
+
+                                if let Some(fp_offset) = fre.stack_offsets.get(1) {
+                                    let fp_addr = (cfa as i64 + fp_offset.get() as i64) as u64;
+                                    // new fp
+                                    fp = unsafe {
+                                        libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0)
                                     } as u64;
-
-                                    if let Some(fp_offset) = fre.stack_offsets.get(1) {
-                                        let fp_addr = (cfa as i64 + fp_offset.get() as i64) as u64;
-                                        // new fp
-                                        fp = unsafe {
-                                            libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0)
-                                        } as u64;
-                                    }
-                                    found = true;
-                                    break 'outer;
                                 }
-                                last = Some(fre);
+                                found = true;
+                                break;
                             }
-                            break;
+                            last = Some(fre);
                         }
                     }
 
