@@ -1,14 +1,21 @@
+//! Crate to parse SFrame stack trace information.
+//!
+//! Usage: Use [SFrameSection::from] to load sframe section content and access
+//! its content.
+//!
+//! Spec: <https://sourceware.org/binutils/docs/sframe-spec.html>
+
 use bitflags::bitflags;
 use core::fmt::Write;
 use fallible_iterator::FallibleIterator;
 use thiserror::Error;
 
+/// Result type for the crate
 pub type SFrameResult<T> = core::result::Result<T, SFrameError>;
 
-// follow https://sourceware.org/binutils/docs/sframe-spec.html
-
 /// SFrame Version
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Version
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Version>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameVersion {
     /// SFRAME_VERSION_1
@@ -18,7 +25,8 @@ pub enum SFrameVersion {
 }
 
 /// SFrame ABI/arch Identifier
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-ABI_002farch-Identifier
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-ABI_002farch-Identifier>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameABI {
     /// SFRAME_ABI_AARCH64_ENDIAN_BIG
@@ -33,7 +41,8 @@ pub enum SFrameABI {
 
 bitflags! {
     /// SFrame Flags
-    /// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Flags
+    ///
+    /// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Flags>
     #[derive(Debug, Clone, Copy)]
     pub struct SFrameFlags: u8 {
         /// Function Descriptor Entries are sorted on PC.
@@ -45,29 +54,31 @@ bitflags! {
     }
 }
 
-/// Contains information of the SFrame section
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Section
+/// SFrame section
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Section>
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub struct SFrameSection<'a> {
-    pub data: &'a [u8],
-    pub section_base: u64,
-    pub little_endian: bool,
-    pub version: SFrameVersion,
-    pub flags: SFrameFlags,
-    pub abi: SFrameABI,
-    pub cfa_fixed_fp_offset: i8,
-    pub cfa_fixed_ra_offset: i8,
-    pub auxhdr_len: u8,
-    pub num_fdes: u32,
-    pub num_fres: u32,
-    pub fre_len: u32,
-    pub fdeoff: u32,
-    pub freoff: u32,
+    data: &'a [u8],
+    section_base: u64,
+    little_endian: bool,
+    version: SFrameVersion,
+    flags: SFrameFlags,
+    abi: SFrameABI,
+    cfa_fixed_fp_offset: i8,
+    cfa_fixed_ra_offset: i8,
+    auxhdr_len: u8,
+    num_fdes: u32,
+    num_fres: u32,
+    fre_len: u32,
+    fdeoff: u32,
+    freoff: u32,
 }
 
 /// Raw SFrame Header
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Header
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Header>
 #[repr(C, packed)]
 struct RawSFrameHeader {
     magic: u16,
@@ -85,10 +96,11 @@ struct RawSFrameHeader {
 }
 
 /// Raw SFrame FDE
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
 #[repr(C, packed)]
 #[allow(dead_code)]
-pub struct RawSFrameFDE {
+struct RawSFrameFDE {
     func_start_address: i32,
     func_size: u32,
     func_start_fre_off: u32,
@@ -99,7 +111,8 @@ pub struct RawSFrameFDE {
 }
 
 /// SFrame FDE Info Word
-/// https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct SFrameFDEInfo(u8);
@@ -138,7 +151,8 @@ impl SFrameFDEInfo {
 }
 
 /// SFrame FRE Types
-/// https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Types
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Types>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFREType {
     /// SFRAME_FRE_TYPE_ADDR0
@@ -156,7 +170,8 @@ pub enum SFrameFREType {
 }
 
 /// SFrame FDE Types
-/// https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Types
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Types>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFDEType {
     /// SFRAME_FDE_TYPE_PCINC
@@ -166,7 +181,8 @@ pub enum SFrameFDEType {
 }
 
 /// SFrame PAuth key
-/// https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameAArch64PAuthKey {
     /// SFRAME_AARCH64_PAUTH_KEY_A
@@ -176,7 +192,8 @@ pub enum SFrameAArch64PAuthKey {
 }
 
 /// SFrame FDE
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
 #[derive(Debug, Clone, Copy)]
 pub struct SFrameFDE {
     /// Offset from the beginning of sframe section
@@ -207,7 +224,8 @@ pub struct SFrameFDE {
 }
 
 /// SFrame FRE Start Address
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFREStartAddress {
     U8(u8),
@@ -227,7 +245,8 @@ impl SFrameFREStartAddress {
 }
 
 /// SFrame FRE Stack Offset
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFREStackOffset {
     I8(i8),
@@ -247,16 +266,21 @@ impl SFrameFREStackOffset {
 }
 
 /// SFrame FRE
-/// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
 #[derive(Debug, Clone)]
 pub struct SFrameFRE {
+    /// Start address (in offset form) of the function
     pub start_address: SFrameFREStartAddress,
+    /// FRE info
     pub info: SFrameFREInfo,
+    /// Stack offsets to access CFA, FP and RA
     pub stack_offsets: Vec<SFrameFREStackOffset>,
 }
 
 /// SFrame FRE Info Word
-/// https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Info-Word
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Info-Word>
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct SFrameFREInfo(u8);
@@ -292,6 +316,7 @@ impl SFrameFREInfo {
     }
 }
 
+/// Iterator for SFrame FRE
 pub struct SFrameFREIterator<'a> {
     fde: &'a SFrameFDE,
     section: &'a SFrameSection<'a>,
@@ -487,6 +512,12 @@ impl<'a> SFrameSection<'a> {
         })
     }
 
+    /// Get the count of FDE entries
+    pub fn get_fde_count(&self) -> u32 {
+        self.num_fdes
+    }
+
+    /// Access FDE by index
     pub fn get_fde(&self, index: u32) -> SFrameResult<Option<SFrameFDE>> {
         if index >= self.num_fdes {
             // out of bounds
@@ -533,6 +564,7 @@ impl<'a> SFrameSection<'a> {
         }))
     }
 
+    /// Print the section in string in the same way as objdump
     pub fn to_string(&self) -> SFrameResult<String> {
         let mut s = String::new();
         writeln!(&mut s, "Header :")?;
@@ -638,24 +670,85 @@ impl<'a> SFrameSection<'a> {
         }
         Ok(s)
     }
+
+    /// Iterate FDE entries
+    pub fn iter_fde(&self) -> SFrameFDEIterator<'_> {
+        SFrameFDEIterator {
+            section: self,
+            index: 0,
+        }
+    }
+
+    /// Get SFrame version
+    pub fn get_version(&self) -> SFrameVersion {
+        self.version
+    }
+
+    /// Get SFrame flags
+    pub fn get_flags(&self) -> SFrameFlags {
+        self.flags
+    }
+
+    /// Get SFrame ABI
+    pub fn get_abi(&self) -> SFrameABI {
+        self.abi
+    }
+
+    /// Get SFrame CFA fixed FP offset
+    pub fn get_cfa_fixed_fp_offset(&self) -> i8 {
+        self.cfa_fixed_fp_offset
+    }
+
+    /// Get SFrame CFA fixed RA offset
+    pub fn get_cfa_fixed_ra_offset(&self) -> i8 {
+        self.cfa_fixed_ra_offset
+    }
 }
 
+/// Iterator for SFrame FDE
+pub struct SFrameFDEIterator<'a> {
+    section: &'a SFrameSection<'a>,
+    index: u32,
+}
+
+impl<'a> FallibleIterator for SFrameFDEIterator<'a> {
+    type Item = SFrameFDE;
+    type Error = SFrameError;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        let res = self.section.get_fde(self.index);
+        if let Ok(Some(_)) = res {
+            self.index += 1;
+        }
+        res
+    }
+}
+
+/// Error types for the crate
 #[derive(Error, Debug)]
 pub enum SFrameError {
+    /// Propagate core::fmt::Error
     #[error("format error")]
     Fmt(#[from] core::fmt::Error),
+    /// Unexpected end of data
     #[error("unexpected end of data")]
     UnexpectedEndOfData,
+    /// Invalid magic number
     #[error("invalid magic number")]
     InvalidMagic,
+    /// Unsupported version
     #[error("unsupported version")]
     UnsupportedVersion,
+    /// Unsupported flags
     #[error("unsupported flags")]
     UnsupportedFlags,
+    /// Unsupported ABI
     #[error("unsupported abi")]
     UnsupportedABI,
+    /// Unsupported FRE type
     #[error("unsupported fre type")]
     UnsupportedFREType,
+    /// Unsupported FRE stack offset size
     #[error("unsupported fre stack offset size")]
     UnsupportedFREStackOffsetSize,
 }
