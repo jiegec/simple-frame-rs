@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use core::fmt::Write;
 use fallible_iterator::FallibleIterator;
 use thiserror::Error;
 
@@ -410,6 +411,7 @@ macro_rules! read_i32 {
 }
 
 impl<'a> SFrameSection<'a> {
+    /// Parse SFrame section from data
     pub fn from(data: &'a [u8], section_base: u64) -> SFrameResult<SFrameSection<'a>> {
         // parse sframe_header
         if data.len() < core::mem::size_of::<RawSFrameHeader>() {
@@ -530,10 +532,84 @@ impl<'a> SFrameSection<'a> {
             func_rep_size: self.data[offset + core::mem::offset_of!(RawSFrameFDE, func_rep_size)],
         }))
     }
+
+    pub fn to_string(&self) -> SFrameResult<String> {
+        let mut s = String::new();
+        writeln!(&mut s, "Header:")?;
+        writeln!(&mut s, "  Version: {:?}", self.version)?;
+        writeln!(&mut s, "  Flags: {:?}", self.flags)?;
+        if self.cfa_fixed_fp_offset != 0 {
+            writeln!(
+                &mut s,
+                "  CFA fixed FP offset: {:?}",
+                self.cfa_fixed_fp_offset
+            )?;
+        }
+        if self.cfa_fixed_ra_offset != 0 {
+            writeln!(
+                &mut s,
+                "  CFA fixed RA offset: {:?}",
+                self.cfa_fixed_ra_offset
+            )?;
+        }
+        writeln!(&mut s, "  Num FDEs: {:?}", self.num_fdes)?;
+        writeln!(&mut s, "  Num FREs: {:?}", self.num_fres)?;
+        writeln!(&mut s)?;
+        writeln!(&mut s, "Function Index:")?;
+        writeln!(&mut s)?;
+        for i in 0..self.num_fdes {
+            let fde = self.get_fde(i)?.unwrap();
+            let pc = fde.get_pc(&self);
+            writeln!(
+                &mut s,
+                "  func index[{i}]: pc = 0x{:x} size = {} bytes",
+                pc, fde.func_size,
+            )?;
+
+            match fde.func_info.get_fde_type()? {
+                SFrameFDEType::PCInc => {
+                    writeln!(&mut s, "  STARTPC           CFA      FP     RA")?;
+                }
+                SFrameFDEType::PCMask => {
+                    writeln!(&mut s, "  STARTPC[m]        CFA      FP     RA")?;
+                }
+            }
+            let mut iter = fde.iter_fre(&self);
+            while let Some(fre) = iter.next()? {
+                let start_pc = match fde.func_info.get_fde_type()? {
+                    SFrameFDEType::PCInc => pc + fre.start_address.get() as u64,
+                    SFrameFDEType::PCMask => fre.start_address.get() as u64,
+                };
+                let rest;
+                match self.abi {
+                    SFrameABI::AMD64LittleEndian => {
+                        let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                            "fp"
+                        } else {
+                            "sp"
+                        };
+                        let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
+                        let fp = match fre.stack_offsets.get(1) {
+                            Some(offset) => format!("c{:+}", offset.get()),
+                            None => format!("u"), // without offset
+                        };
+                        let ra = "f"; // fixed
+                        rest = format!("{cfa:8} {fp:6} {ra}");
+                    }
+                    _ => todo!(),
+                }
+                writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
+            }
+            writeln!(&mut s,)?;
+        }
+        Ok(s)
+    }
 }
 
 #[derive(Error, Debug)]
 pub enum SFrameError {
+    #[error("format error")]
+    Fmt(#[from] core::fmt::Error),
     #[error("unexpected end of data")]
     UnexpectedEndOfData,
     #[error("invalid magic number")]
