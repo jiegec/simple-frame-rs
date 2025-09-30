@@ -50,6 +50,7 @@ bitflags! {
 #[allow(dead_code)]
 pub struct SFrameSection<'a> {
     pub data: &'a [u8],
+    pub section_base: u64,
     pub little_endian: bool,
     pub version: SFrameVersion,
     pub flags: SFrameFlags,
@@ -177,6 +178,8 @@ pub enum SFrameAArch64PAuthKey {
 /// https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries
 #[derive(Debug, Clone, Copy)]
 pub struct SFrameFDE {
+    /// Offset from the beginning of sframe section
+    offset: usize,
     /// Signed 32-bit integral field denoting the virtual memory address of the
     /// described function,for which the SFrame FDE applies. If the flag
     /// SFRAME_F_FDE_FUNC_START_PCREL, See SFrame Flags, in the SFrame header is
@@ -352,6 +355,19 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
 }
 
 impl SFrameFDE {
+    /// Compute pc of the function
+    pub fn get_pc(&self, section: &SFrameSection<'_>) -> u64 {
+        if section
+            .flags
+            .contains(SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL)
+        {
+            (self.func_start_address as i64 + self.offset as i64 + section.section_base as i64)
+                as u64
+        } else {
+            (self.func_start_address as i64 + section.section_base as i64) as u64
+        }
+    }
+
     pub fn iter_fre<'a>(&'a self, section: &'a SFrameSection<'a>) -> SFrameFREIterator<'a> {
         let offset = section.freoff as usize
             + core::mem::size_of::<RawSFrameHeader>()
@@ -394,7 +410,7 @@ macro_rules! read_i32 {
 }
 
 impl<'a> SFrameSection<'a> {
-    pub fn from(data: &'a [u8]) -> SFrameResult<SFrameSection<'a>> {
+    pub fn from(data: &'a [u8], section_base: u64) -> SFrameResult<SFrameSection<'a>> {
         // parse sframe_header
         if data.len() < core::mem::size_of::<RawSFrameHeader>() {
             return Err(SFrameError::UnexpectedEndOfData);
@@ -453,6 +469,7 @@ impl<'a> SFrameSection<'a> {
 
         Ok(SFrameSection {
             data,
+            section_base,
             little_endian,
             version,
             flags,
@@ -482,6 +499,7 @@ impl<'a> SFrameSection<'a> {
         }
 
         Ok(Some(SFrameFDE {
+            offset,
             func_start_address: read_i32!(
                 RawSFrameFDE,
                 &self.data[offset..],

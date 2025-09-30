@@ -8,9 +8,9 @@ fn main() -> anyhow::Result<()> {
         let file = object::File::parse(&*data)?;
         for section in file.sections() {
             if section.name()? == ".sframe" {
-                let section_start = section.address();
+                let section_base = section.address();
                 let content = section.data()?;
-                let parsed = SFrameSection::from(content)?;
+                let parsed = SFrameSection::from(content, section_base)?;
                 println!("Header:");
                 println!("  Version: {:?}", parsed.version);
                 println!("  Flags: {:?}", parsed.flags);
@@ -27,8 +27,7 @@ fn main() -> anyhow::Result<()> {
                 println!();
                 for i in 0..parsed.num_fdes {
                     let fde = parsed.get_fde(i)?.unwrap();
-                    // TODO: SFRAME_F_FDE_FUNC_START_PCREL
-                    let pc = (fde.func_start_address as i64 + section_start as i64) as u64;
+                    let pc = fde.get_pc(&parsed);
                     println!(
                         "  func index[{i}]: pc = 0x{:x} size = {} bytes",
                         pc, fde.func_size,
