@@ -535,9 +535,24 @@ impl<'a> SFrameSection<'a> {
 
     pub fn to_string(&self) -> SFrameResult<String> {
         let mut s = String::new();
-        writeln!(&mut s, "Header:")?;
-        writeln!(&mut s, "  Version: {:?}", self.version)?;
-        writeln!(&mut s, "  Flags: {:?}", self.flags)?;
+        writeln!(&mut s, "Header :")?;
+        writeln!(&mut s)?;
+        writeln!(
+            &mut s,
+            "  Version: {}",
+            match self.version {
+                SFrameVersion::V1 => "SFRAME_VERSION_1",
+                SFrameVersion::V2 => "SFRAME_VERSION_2",
+            }
+        )?;
+        writeln!(
+            &mut s,
+            "  Flags: {}",
+            self.flags
+                .iter_names()
+                .map(|(name, _flag)| name)
+                .collect::<Vec<_>>().join(" | ")
+        )?;
         if self.cfa_fixed_fp_offset != 0 {
             writeln!(
                 &mut s,
@@ -555,14 +570,14 @@ impl<'a> SFrameSection<'a> {
         writeln!(&mut s, "  Num FDEs: {:?}", self.num_fdes)?;
         writeln!(&mut s, "  Num FREs: {:?}", self.num_fres)?;
         writeln!(&mut s)?;
-        writeln!(&mut s, "Function Index:")?;
+        writeln!(&mut s, "Function Index :")?;
         writeln!(&mut s)?;
         for i in 0..self.num_fdes {
             let fde = self.get_fde(i)?.unwrap();
             let pc = fde.get_pc(&self);
             writeln!(
                 &mut s,
-                "  func index[{i}]: pc = 0x{:x} size = {} bytes",
+                "  func idx [{i}]: pc = 0x{:x}, size = {} bytes",
                 pc, fde.func_size,
             )?;
 
@@ -627,4 +642,50 @@ pub enum SFrameError {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::iter::zip;
+
+    use serde::{Deserialize, Serialize};
+    #[derive(Serialize, Deserialize)]
+    struct Testcase {
+        section_base: u64,
+        content: Vec<u8>,
+        groundtruth: String,
+    }
+
+    #[test]
+    fn test() {
+        for entry in std::fs::read_dir("testcases").unwrap() {
+            let entry = entry.unwrap();
+            let testcase: Testcase =
+                serde_json::from_reader(std::fs::File::open(entry.path()).unwrap()).unwrap();
+            let section =
+                crate::SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
+            let s = section.to_string().unwrap();
+            let mut lines_expected: Vec<&str> = testcase.groundtruth.trim().split("\n").collect();
+
+            // drop prefix
+            while let Some(line) = lines_expected.first() {
+                if line.contains("Header :") {
+                    break;
+                }
+                lines_expected.remove(0);
+            }
+            let lines_actual: Vec<&str> = s.trim().split("\n").collect();
+
+            // compare line by line
+            assert_eq!(lines_expected.len(), lines_actual.len());
+            for (expected, actual) in zip(lines_expected, lines_actual) {
+                let parts_expected: Vec<&str> =
+                    expected.trim().split(" ").filter(|s| s.len() > 0).collect();
+                let parts_actual: Vec<&str> =
+                    actual.trim().split(" ").filter(|s| s.len() > 0).collect();
+                assert_eq!(
+                    parts_expected, parts_actual,
+                    "\"{}\"({:?}) != \"{}\"({:?})",
+                    expected, parts_expected, actual, parts_actual,
+                );
+            }
+        }
+    }
+}
