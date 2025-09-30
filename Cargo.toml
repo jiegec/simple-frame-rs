@@ -1,7 +1,11 @@
 [package]
 name = "simple-frame-rs"
 version = "0.1.0"
+authors = ["Jiajie Chen <c@jia.je>"]
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/jiegec/simple-frame-rs"
+description = "Parse SFrame (Simple Frame) stack trace information"
 
 [dependencies]
 bitflags = "2.9.4"
