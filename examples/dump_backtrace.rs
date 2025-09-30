@@ -1,8 +1,7 @@
-use std::mem::MaybeUninit;
-
 use fallible_iterator::FallibleIterator;
 use object::{Object, ObjectSection};
 use simple_frame_rs::{SFrameFRE, SFrameSection};
+use std::mem::MaybeUninit;
 
 fn main() -> anyhow::Result<()> {
     for arg in std::env::args().skip(1) {
