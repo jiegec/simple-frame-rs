@@ -351,7 +351,6 @@ impl<'a> SFrameSection<'a> {
 
     /// Find FDE entry by pc
     pub fn find_fde(&self, pc: u64) -> SFrameResult<Option<SFrameFDE>> {
-        // TODO: support SFRAME_FDE_TYPE_PCMASK
         if self.flags.contains(SFrameFlags::SFRAME_F_FDE_SORTED) {
             // binary search
             // mimic binary_search_by impl from rust std
@@ -587,6 +586,7 @@ impl SFrameFDE {
         }
     }
 
+    /// Iterate FRE entries
     pub fn iter_fre<'a>(&'a self, section: &'a SFrameSection<'a>) -> SFrameFREIterator<'a> {
         // "The sub-section offsets, namely sfh_fdeoff and sfh_freoff, in the
         // SFrame header are relative to the end of the SFrame header; they are
@@ -604,6 +604,48 @@ impl SFrameFDE {
             section,
             offset,
             index: 0,
+        }
+    }
+
+    /// Find FRE entry by pc
+    pub fn find_fre(
+        &self,
+        section: &SFrameSection<'_>,
+        pc: u64,
+    ) -> SFrameResult<Option<SFrameFRE>> {
+        let fde_pc = self.get_pc(section);
+        match self.func_info.get_fde_type()? {
+            SFrameFDEType::PCInc => {
+                // find matching fre entry with max pc
+                let mut last: Option<SFrameFRE> = None;
+                let mut iter = self.iter_fre(&section);
+                while let Some(fre) = iter.next()? {
+                    if fre.start_address.get() as u64 + fde_pc > pc {
+                        // last is the matching one
+                        break;
+                    }
+                    last = Some(fre);
+                }
+                if let Some(fre) = last {
+                    // PC >= FRE_START_ADDR
+                    if fre.start_address.get() as u64 + fde_pc <= pc {
+                        return Ok(Some(fre));
+                    }
+                }
+                return Ok(None);
+            }
+            SFrameFDEType::PCMask => {
+                // match by pc masking
+                let mut iter = self.iter_fre(&section);
+                while let Some(fre) = iter.next()? {
+                    // PC % REP_BLOCK_SIZE >= FRE_START_ADDR
+                    if pc % self.func_rep_size as u64 >= fre.start_address.get() as u64 {
+                        // found
+                        return Ok(Some(fre));
+                    }
+                }
+                return Ok(None);
+            }
         }
     }
 }

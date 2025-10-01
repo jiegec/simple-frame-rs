@@ -1,6 +1,5 @@
-use fallible_iterator::FallibleIterator;
 use object::{Object, ObjectSection};
-use simple_frame_rs::{SFrameFRE, SFrameSection};
+use simple_frame_rs::SFrameSection;
 use std::mem::MaybeUninit;
 
 fn main() -> anyhow::Result<()> {
@@ -44,55 +43,38 @@ fn main() -> anyhow::Result<()> {
                     println!("SP = 0x{:x}", sp);
                     println!("FP = 0x{:x}", fp);
 
-                    let mut found = false;
                     // find fre by pc
                     if let Some(fde) = parsed.find_fde(pc)? {
-                        // found fde
-                        let offset = pc - fde.get_pc(&parsed);
+                        if let Some(fre) = fde.find_fre(&parsed, pc)? {
+                            let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                                fp
+                            } else {
+                                sp
+                            };
+                            let cfa =
+                                (base_reg as i64 + fre.get_cfa_offset().unwrap() as i64) as u64;
 
-                        // find fre
-                        let mut iter = fde.iter_fre(&parsed);
-                        let mut last: Option<SFrameFRE> = None;
-                        while let Some(fre) = iter.next()? {
-                            if fre.start_address.get() as u64 > offset {
-                                // last is the matching one
-                                let fre = last.unwrap();
-                                let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
-                                    fp
-                                } else {
-                                    sp
-                                };
-                                let cfa =
-                                    (base_reg as i64 + fre.get_cfa_offset().unwrap() as i64) as u64;
+                            // new sp
+                            sp = cfa;
 
-                                // new sp
-                                sp = cfa;
+                            let ra_addr =
+                                (cfa as i64 + fre.get_ra_offset(&parsed).unwrap() as i64) as u64;
+                            // new pc
+                            pc = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0) }
+                                as u64;
 
-                                let ra_addr = (cfa as i64
-                                    + fre.get_ra_offset(&parsed).unwrap() as i64)
+                            if let Some(fp_offset) = fre.get_fp_offset(&parsed) {
+                                let fp_addr = (cfa as i64 + fp_offset as i64) as u64;
+                                // new fp
+                                fp = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0) }
                                     as u64;
-                                // new pc
-                                pc = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0) }
-                                    as u64;
-
-                                if let Some(fp_offset) = fre.get_fp_offset(&parsed) {
-                                    let fp_addr = (cfa as i64 + fp_offset as i64) as u64;
-                                    // new fp
-                                    fp = unsafe {
-                                        libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0)
-                                    } as u64;
-                                }
-                                found = true;
-                                break;
                             }
-                            last = Some(fre);
+                            frame += 1;
+                            continue;
                         }
                     }
 
-                    if !found {
-                        break;
-                    }
-                    frame += 1;
+                    break;
                 }
 
                 unsafe {
