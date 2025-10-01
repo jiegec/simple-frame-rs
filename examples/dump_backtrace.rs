@@ -1,10 +1,9 @@
-#![cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
+fn inner_main() -> anyhow::Result<()> {
+    use object::{Object, ObjectSection};
+    use simple_frame_rs::SFrameSection;
+    use std::mem::MaybeUninit;
 
-use object::{Object, ObjectSection};
-use simple_frame_rs::SFrameSection;
-use std::mem::MaybeUninit;
-
-fn main() -> anyhow::Result<()> {
     for arg in std::env::args().skip(1) {
         let pid = usize::from_str_radix(&arg, 10)?;
         println!("Attempt to dump backtrace of process with pid {}", pid);
@@ -93,4 +92,15 @@ fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn inner_main() -> anyhow::Result<()> {
+    println!("This example only works on Linux systems");
+    println!("It requires /proc filesystem and ptrace functionality");
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    inner_main()
 }
