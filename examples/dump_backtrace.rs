@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use object::{Object, ObjectSection};
 use simple_frame_rs::SFrameSection;
 use std::mem::MaybeUninit;
