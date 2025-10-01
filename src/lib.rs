@@ -94,366 +94,6 @@ pub struct SFrameSection<'a> {
     freoff: u32,
 }
 
-/// Raw SFrame Header
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Header>
-#[repr(C, packed)]
-struct RawSFrameHeader {
-    magic: u16,
-    version: u8,
-    flags: u8,
-    abi_arch: u8,
-    cfa_fixed_fp_offset: i8,
-    cfa_fixed_ra_offset: i8,
-    auxhdr_len: u8,
-    num_fdes: u32,
-    num_fres: u32,
-    fre_len: u32,
-    fdeoff: u32,
-    freoff: u32,
-}
-
-/// Raw SFrame FDE
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
-#[repr(C, packed)]
-#[allow(dead_code)]
-struct RawSFrameFDE {
-    func_start_address: i32,
-    func_size: u32,
-    func_start_fre_off: u32,
-    func_num_fres: u32,
-    func_info: u8,
-    func_rep_size: u8,
-    func_padding2: u16,
-}
-
-/// SFrame FDE Info Word
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
-#[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
-pub struct SFrameFDEInfo(u8);
-
-impl SFrameFDEInfo {
-    /// Get SFrame FRE type
-    pub fn get_fre_type(&self) -> SFrameResult<SFrameFREType> {
-        let fretype = self.0 & 0b1111;
-        match fretype {
-            0 => Ok(SFrameFREType::Addr0),
-            1 => Ok(SFrameFREType::Addr1),
-            2 => Ok(SFrameFREType::Addr2),
-            _ => Err(SFrameError::UnsupportedFREType),
-        }
-    }
-
-    /// Get SFrame FDE type
-    pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
-        let fretype = (self.0 >> 4) & 0b1;
-        match fretype {
-            0 => Ok(SFrameFDEType::PCInc),
-            1 => Ok(SFrameFDEType::PCMask),
-            _ => unreachable!(),
-        }
-    }
-
-    /// Get SFrame AArch64 pauth key
-    pub fn get_aarch64_pauth_key(&self) -> SFrameResult<SFrameAArch64PAuthKey> {
-        let fretype = (self.0 >> 5) & 0b1;
-        match fretype {
-            0 => Ok(SFrameAArch64PAuthKey::KeyA),
-            1 => Ok(SFrameAArch64PAuthKey::KeyB),
-            _ => unreachable!(),
-        }
-    }
-}
-
-/// SFrame FRE Types
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Types>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameFREType {
-    /// SFRAME_FRE_TYPE_ADDR0
-    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 8-bit value.
-    Addr0,
-    /// SFRAME_FRE_TYPE_ADDR1
-    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 16-bit value.
-    Addr1,
-    /// SFRAME_FRE_TYPE_ADDR2
-    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 32-bit value.
-    Addr2,
-}
-
-/// SFrame FDE Types
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Types>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameFDEType {
-    /// SFRAME_FDE_TYPE_PCINC
-    PCInc,
-    /// SFRAME_FDE_TYPE_PCMASK
-    PCMask,
-}
-
-/// SFrame PAuth key
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameAArch64PAuthKey {
-    /// SFRAME_AARCH64_PAUTH_KEY_A
-    KeyA,
-    /// SFRAME_AARCH64_PAUTH_KEY_B
-    KeyB,
-}
-
-/// SFrame FDE
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
-#[derive(Debug, Clone, Copy)]
-pub struct SFrameFDE {
-    /// Offset from the beginning of sframe section
-    offset: usize,
-    /// Signed 32-bit integral field denoting the virtual memory address of the
-    /// described function,for which the SFrame FDE applies. If the flag
-    /// SFRAME_F_FDE_FUNC_START_PCREL, See SFrame Flags, in the SFrame header is
-    /// set, the value encoded in the sfde_func_start_address field is the
-    /// offset in bytes to the function’s start address, from the SFrame
-    /// sfde_func_start_address field.
-    pub func_start_address: i32,
-    /// Unsigned 32-bit integral field specifying the size of the function in
-    /// bytes.
-    pub func_size: u32,
-    /// Unsigned 32-bit integral field specifying the offset in bytes of the
-    /// function’s first SFrame FRE in the SFrame section.
-    pub func_start_fre_off: u32,
-    /// Unsigned 32-bit integral field specifying the total number of SFrame
-    /// FREs used for the function.
-    pub func_num_fres: u32,
-    /// Unsigned 8-bit integral field specifying the SFrame FDE info word. See
-    /// The SFrame FDE Info Word.
-    pub func_info: SFrameFDEInfo,
-    /// Unsigned 8-bit integral field specifying the size of the repetitive code
-    /// block for which an SFrame FDE of type SFRAME_FDE_TYPE_PCMASK is used.
-    /// For example, in AMD64, the size of a pltN entry is 16 bytes.
-    pub func_rep_size: u8,
-}
-
-/// SFrame FRE Start Address
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameFREStartAddress {
-    U8(u8),
-    U16(u16),
-    U32(u32),
-}
-
-impl SFrameFREStartAddress {
-    /// Convert the variable sized address to u32
-    pub fn get(&self) -> u32 {
-        match self {
-            SFrameFREStartAddress::U8(i) => *i as u32,
-            SFrameFREStartAddress::U16(i) => *i as u32,
-            SFrameFREStartAddress::U32(i) => *i,
-        }
-    }
-}
-
-/// SFrame FRE Stack Offset
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameFREStackOffset {
-    I8(i8),
-    I16(i16),
-    I32(i32),
-}
-
-impl SFrameFREStackOffset {
-    /// Convert the variable sized offset to i32
-    pub fn get(&self) -> i32 {
-        match self {
-            SFrameFREStackOffset::I8(i) => *i as i32,
-            SFrameFREStackOffset::I16(i) => *i as i32,
-            SFrameFREStackOffset::I32(i) => *i,
-        }
-    }
-}
-
-/// SFrame FRE
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
-#[derive(Debug, Clone)]
-pub struct SFrameFRE {
-    /// Start address (in offset form) of the function
-    pub start_address: SFrameFREStartAddress,
-    /// FRE info
-    pub info: SFrameFREInfo,
-    /// Stack offsets to access CFA, FP and RA
-    pub stack_offsets: Vec<SFrameFREStackOffset>,
-}
-
-/// SFrame FRE Info Word
-///
-/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Info-Word>
-#[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
-pub struct SFrameFREInfo(u8);
-
-impl SFrameFREInfo {
-    /// Indicate whether the return address is mangled with any authorization
-    /// bits (signed RA).
-    pub fn get_mangled_ra_p(&self) -> bool {
-        (self.0 >> 7) & 0b1 == 1
-    }
-
-    /// Size of stack offsets in bytes.
-    pub fn get_offset_size(&self) -> SFrameResult<usize> {
-        match (self.0 >> 5) & 0b11 {
-            // SFRAME_FRE_OFFSET_1B
-            0x0 => Ok(1),
-            // SFRAME_FRE_OFFSET_2B
-            0x1 => Ok(2),
-            // SFRAME_FRE_OFFSET_4B
-            0x2 => Ok(4),
-            _ => Err(SFrameError::UnsupportedFREStackOffsetSize),
-        }
-    }
-
-    /// The number of stack offsets in the FRE
-    pub fn get_offset_count(&self) -> u8 {
-        (self.0 >> 1) & 0b111
-    }
-
-    /// Distinguish between SP or FP based CFA recovery.
-    pub fn get_cfa_base_reg_id(&self) -> u8 {
-        self.0 & 0b1
-    }
-}
-
-/// Iterator for SFrame FRE
-pub struct SFrameFREIterator<'a> {
-    fde: &'a SFrameFDE,
-    section: &'a SFrameSection<'a>,
-    index: u32,
-    offset: usize,
-}
-
-impl<'a> FallibleIterator for SFrameFREIterator<'a> {
-    type Item = SFrameFRE;
-    type Error = SFrameError;
-
-    fn next(&mut self) -> SFrameResult<Option<SFrameFRE>> {
-        if self.index >= self.fde.func_num_fres {
-            return Ok(None);
-        }
-
-        let fre_type = self.fde.func_info.get_fre_type()?;
-        let entry_size = match fre_type {
-            SFrameFREType::Addr0 => 1 + 1,
-            SFrameFREType::Addr1 => 2 + 1,
-            SFrameFREType::Addr2 => 4 + 1,
-        } as usize;
-        let offset = self.offset;
-        if offset + entry_size > self.section.data.len() {
-            return Err(SFrameError::UnexpectedEndOfData);
-        }
-
-        let (start_address, info) = match self.fde.func_info.get_fre_type()? {
-            SFrameFREType::Addr0 => (
-                SFrameFREStartAddress::U8(self.section.data[offset]),
-                SFrameFREInfo(self.section.data[offset + 1]),
-            ),
-            SFrameFREType::Addr1 => (
-                SFrameFREStartAddress::U16(read_binary!(
-                    self.section.data,
-                    self.section.little_endian,
-                    u16,
-                    offset
-                )),
-                SFrameFREInfo(self.section.data[offset + 2]),
-            ),
-            SFrameFREType::Addr2 => (
-                SFrameFREStartAddress::U32(read_binary!(
-                    self.section.data,
-                    self.section.little_endian,
-                    u32,
-                    offset
-                )),
-                SFrameFREInfo(self.section.data[offset + 4]),
-            ),
-        };
-
-        let offset_size = info.get_offset_size()?;
-        let offset_count = info.get_offset_count() as usize;
-        let offset_total_size = offset_size * offset_count;
-        if offset + entry_size + offset_total_size > self.section.data.len() {
-            return Err(SFrameError::UnexpectedEndOfData);
-        }
-
-        let mut stack_offsets = vec![];
-        for i in 0..offset_count {
-            match offset_size {
-                1 => stack_offsets.push(SFrameFREStackOffset::I8(
-                    self.section.data[offset + entry_size + i * offset_size] as i8,
-                )),
-                2 => stack_offsets.push(SFrameFREStackOffset::I16(read_binary!(
-                    self.section.data,
-                    self.section.little_endian,
-                    i16,
-                    offset + entry_size + i * offset_size
-                ))),
-                4 => stack_offsets.push(SFrameFREStackOffset::I32(read_binary!(
-                    self.section.data,
-                    self.section.little_endian,
-                    i32,
-                    offset + entry_size + i * offset_size
-                ))),
-                _ => unreachable!(),
-            }
-        }
-
-        self.offset += entry_size + offset_total_size;
-        self.index += 1;
-
-        Ok(Some(SFrameFRE {
-            start_address,
-            info,
-            stack_offsets,
-        }))
-    }
-}
-
-impl SFrameFDE {
-    /// Compute pc of the function
-    pub fn get_pc(&self, section: &SFrameSection<'_>) -> u64 {
-        if section
-            .flags
-            .contains(SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL)
-        {
-            (self.func_start_address as i64 + self.offset as i64 + section.section_base as i64)
-                as u64
-        } else {
-            (self.func_start_address as i64 + section.section_base as i64) as u64
-        }
-    }
-
-    pub fn iter_fre<'a>(&'a self, section: &'a SFrameSection<'a>) -> SFrameFREIterator<'a> {
-        let offset = section.freoff as usize
-            + core::mem::size_of::<RawSFrameHeader>()
-            + self.func_start_fre_off as usize;
-        SFrameFREIterator {
-            fde: self,
-            section,
-            offset,
-            index: 0,
-        }
-    }
-}
-
 /// The magic number for SFrame section: 0xdee2
 const SFRAME_MAGIC: u16 = 0xdee2;
 
@@ -546,6 +186,10 @@ impl<'a> SFrameSection<'a> {
             return Ok(None);
         }
 
+        // The sub-section offsets, namely sfh_fdeoff and sfh_freoff, in the
+        // SFrame header are relative to the end of the SFrame header; they are
+        // each an offset in bytes into the SFrame section where the SFrame FDE
+        // sub-section and the SFrame FRE sub-section respectively start.
         let offset = self.fdeoff as usize
             + index as usize * core::mem::size_of::<RawSFrameFDE>()
             + core::mem::size_of::<RawSFrameHeader>();
@@ -707,6 +351,7 @@ impl<'a> SFrameSection<'a> {
 
     /// Find FDE entry by pc
     pub fn find_fde(&self, pc: u64) -> SFrameResult<Option<SFrameFDE>> {
+        // TODO: support SFRAME_FDE_TYPE_PCMASK
         if self.flags.contains(SFrameFlags::SFRAME_F_FDE_SORTED) {
             // binary search
             // mimic binary_search_by impl from rust std
@@ -773,6 +418,415 @@ impl<'a> SFrameSection<'a> {
     /// Get SFrame CFA fixed RA offset
     pub fn get_cfa_fixed_ra_offset(&self) -> i8 {
         self.cfa_fixed_ra_offset
+    }
+}
+
+/// Raw SFrame Header
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Header>
+#[repr(C, packed)]
+struct RawSFrameHeader {
+    magic: u16,
+    version: u8,
+    flags: u8,
+    abi_arch: u8,
+    cfa_fixed_fp_offset: i8,
+    cfa_fixed_ra_offset: i8,
+    auxhdr_len: u8,
+    num_fdes: u32,
+    num_fres: u32,
+    fre_len: u32,
+    fdeoff: u32,
+    freoff: u32,
+}
+
+/// Raw SFrame FDE
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
+#[repr(C, packed)]
+#[allow(dead_code)]
+struct RawSFrameFDE {
+    func_start_address: i32,
+    func_size: u32,
+    func_start_fre_off: u32,
+    func_num_fres: u32,
+    func_info: u8,
+    func_rep_size: u8,
+    func_padding2: u16,
+}
+
+/// SFrame FDE Info Word
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct SFrameFDEInfo(u8);
+
+impl SFrameFDEInfo {
+    /// Get SFrame FRE type
+    pub fn get_fre_type(&self) -> SFrameResult<SFrameFREType> {
+        let fretype = self.0 & 0b1111;
+        match fretype {
+            0 => Ok(SFrameFREType::Addr0),
+            1 => Ok(SFrameFREType::Addr1),
+            2 => Ok(SFrameFREType::Addr2),
+            _ => Err(SFrameError::UnsupportedFREType),
+        }
+    }
+
+    /// Get SFrame FDE type
+    pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
+        let fretype = (self.0 >> 4) & 0b1;
+        match fretype {
+            0 => Ok(SFrameFDEType::PCInc),
+            1 => Ok(SFrameFDEType::PCMask),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Get SFrame AArch64 pauth key
+    pub fn get_aarch64_pauth_key(&self) -> SFrameResult<SFrameAArch64PAuthKey> {
+        let fretype = (self.0 >> 5) & 0b1;
+        match fretype {
+            0 => Ok(SFrameAArch64PAuthKey::KeyA),
+            1 => Ok(SFrameAArch64PAuthKey::KeyB),
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// SFrame FRE Types
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Types>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameFREType {
+    /// SFRAME_FRE_TYPE_ADDR0
+    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
+    /// 8-bit value.
+    Addr0,
+    /// SFRAME_FRE_TYPE_ADDR1
+    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
+    /// 16-bit value.
+    Addr1,
+    /// SFRAME_FRE_TYPE_ADDR2
+    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
+    /// 32-bit value.
+    Addr2,
+}
+
+/// SFrame FDE Types
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Types>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameFDEType {
+    /// SFRAME_FDE_TYPE_PCINC
+    PCInc,
+    /// SFRAME_FDE_TYPE_PCMASK
+    PCMask,
+}
+
+/// SFrame PAuth key
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FDE-Info-Word>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameAArch64PAuthKey {
+    /// SFRAME_AARCH64_PAUTH_KEY_A
+    KeyA,
+    /// SFRAME_AARCH64_PAUTH_KEY_B
+    KeyB,
+}
+
+/// SFrame FDE
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
+#[derive(Debug, Clone, Copy)]
+pub struct SFrameFDE {
+    /// Offset from the beginning of sframe section
+    offset: usize,
+    /// Signed 32-bit integral field denoting the virtual memory address of the
+    /// described function,for which the SFrame FDE applies. If the flag
+    /// SFRAME_F_FDE_FUNC_START_PCREL, See SFrame Flags, in the SFrame header is
+    /// set, the value encoded in the sfde_func_start_address field is the
+    /// offset in bytes to the function’s start address, from the SFrame
+    /// sfde_func_start_address field.
+    pub func_start_address: i32,
+    /// Unsigned 32-bit integral field specifying the size of the function in
+    /// bytes.
+    pub func_size: u32,
+    /// Unsigned 32-bit integral field specifying the offset in bytes of the
+    /// function’s first SFrame FRE in the SFrame section.
+    pub func_start_fre_off: u32,
+    /// Unsigned 32-bit integral field specifying the total number of SFrame
+    /// FREs used for the function.
+    pub func_num_fres: u32,
+    /// Unsigned 8-bit integral field specifying the SFrame FDE info word. See
+    /// The SFrame FDE Info Word.
+    pub func_info: SFrameFDEInfo,
+    /// Unsigned 8-bit integral field specifying the size of the repetitive code
+    /// block for which an SFrame FDE of type SFRAME_FDE_TYPE_PCMASK is used.
+    /// For example, in AMD64, the size of a pltN entry is 16 bytes.
+    pub func_rep_size: u8,
+}
+
+impl SFrameFDE {
+    /// Compute pc of the function
+    pub fn get_pc(&self, section: &SFrameSection<'_>) -> u64 {
+        // "If the flag SFRAME_F_FDE_FUNC_START_PCREL, See SFrame Flags, in the
+        // SFrame header is set, the value encoded in the
+        // sfde_func_start_address field is the offset in bytes to the
+        // function’s start address, from the SFrame sfde_func_start_address
+        // field."
+        if section
+            .flags
+            .contains(SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL)
+        {
+            (self.func_start_address as i64 + self.offset as i64 + section.section_base as i64)
+                as u64
+        } else {
+            (self.func_start_address as i64 + section.section_base as i64) as u64
+        }
+    }
+
+    pub fn iter_fre<'a>(&'a self, section: &'a SFrameSection<'a>) -> SFrameFREIterator<'a> {
+        // "The sub-section offsets, namely sfh_fdeoff and sfh_freoff, in the
+        // SFrame header are relative to the end of the SFrame header; they are
+        // each an offset in bytes into the SFrame section where the SFrame FDE
+        // sub-section and the SFrame FRE sub-section respectively start."
+        // "sfde_func_start_fre_off is the offset to the first SFrame FRE for
+        // the function. This offset is relative to the end of the SFrame FDE
+        // sub-section (unlike the sub-section offsets in the SFrame header,
+        // which are relative to the end of the SFrame header)."
+        let offset = section.freoff as usize
+            + core::mem::size_of::<RawSFrameHeader>()
+            + self.func_start_fre_off as usize;
+        SFrameFREIterator {
+            fde: self,
+            section,
+            offset,
+            index: 0,
+        }
+    }
+}
+
+/// SFrame FRE Start Address
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameFREStartAddress {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+}
+
+impl SFrameFREStartAddress {
+    /// Convert the variable sized address to u32
+    pub fn get(&self) -> u32 {
+        match self {
+            SFrameFREStartAddress::U8(i) => *i as u32,
+            SFrameFREStartAddress::U16(i) => *i as u32,
+            SFrameFREStartAddress::U32(i) => *i,
+        }
+    }
+}
+
+/// SFrame FRE Stack Offset
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameFREStackOffset {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+}
+
+impl SFrameFREStackOffset {
+    /// Convert the variable sized offset to i32
+    pub fn get(&self) -> i32 {
+        match self {
+            SFrameFREStackOffset::I8(i) => *i as i32,
+            SFrameFREStackOffset::I16(i) => *i as i32,
+            SFrameFREStackOffset::I32(i) => *i,
+        }
+    }
+}
+
+/// SFrame FRE
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
+#[derive(Debug, Clone)]
+pub struct SFrameFRE {
+    /// Start address (in offset form) of the function
+    pub start_address: SFrameFREStartAddress,
+    /// FRE info
+    pub info: SFrameFREInfo,
+    /// Stack offsets to access CFA, FP and RA
+    pub stack_offsets: Vec<SFrameFREStackOffset>,
+}
+
+impl SFrameFRE {
+    /// Get CFA offset against base reg
+    pub fn get_cfa_offset(&self) -> Option<i32> {
+        // currently always the first offset
+        self.stack_offsets.get(0).map(|offset| offset.get())
+    }
+
+    /// Get RA offset against CFA
+    pub fn get_ra_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
+        match section.abi {
+            // the second offset for aarch64
+            SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {
+                self.stack_offsets.get(1).map(|offset| offset.get())
+            }
+            // always fixed for amd64
+            SFrameABI::AMD64LittleEndian => Some(section.cfa_fixed_ra_offset as i32),
+            // TODO: stack slot or register number
+            SFrameABI::S390XBigEndian => todo!(),
+        }
+    }
+
+    /// Get FP offset against CFA
+    pub fn get_fp_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
+        match section.abi {
+            // the third offset for aarch64
+            SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {
+                self.stack_offsets.get(2).map(|offset| offset.get())
+            }
+            // the second offset for aarch64
+            SFrameABI::AMD64LittleEndian => self.stack_offsets.get(1).map(|offset| offset.get()),
+            // TODO: stack slot or register number
+            SFrameABI::S390XBigEndian => todo!(),
+        }
+    }
+}
+
+/// SFrame FRE Info Word
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#The-SFrame-FRE-Info-Word>
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct SFrameFREInfo(u8);
+
+impl SFrameFREInfo {
+    /// Indicate whether the return address is mangled with any authorization
+    /// bits (signed RA).
+    pub fn get_mangled_ra_p(&self) -> bool {
+        (self.0 >> 7) & 0b1 == 1
+    }
+
+    /// Size of stack offsets in bytes.
+    pub fn get_offset_size(&self) -> SFrameResult<usize> {
+        match (self.0 >> 5) & 0b11 {
+            // SFRAME_FRE_OFFSET_1B
+            0x0 => Ok(1),
+            // SFRAME_FRE_OFFSET_2B
+            0x1 => Ok(2),
+            // SFRAME_FRE_OFFSET_4B
+            0x2 => Ok(4),
+            _ => Err(SFrameError::UnsupportedFREStackOffsetSize),
+        }
+    }
+
+    /// The number of stack offsets in the FRE
+    pub fn get_offset_count(&self) -> u8 {
+        (self.0 >> 1) & 0b111
+    }
+
+    /// Distinguish between SP or FP based CFA recovery.
+    pub fn get_cfa_base_reg_id(&self) -> u8 {
+        self.0 & 0b1
+    }
+}
+
+/// Iterator for SFrame FRE
+pub struct SFrameFREIterator<'a> {
+    fde: &'a SFrameFDE,
+    section: &'a SFrameSection<'a>,
+    index: u32,
+    offset: usize,
+}
+
+impl<'a> FallibleIterator for SFrameFREIterator<'a> {
+    type Item = SFrameFRE;
+    type Error = SFrameError;
+
+    fn next(&mut self) -> SFrameResult<Option<SFrameFRE>> {
+        if self.index >= self.fde.func_num_fres {
+            return Ok(None);
+        }
+
+        let fre_type = self.fde.func_info.get_fre_type()?;
+        let entry_size = match fre_type {
+            SFrameFREType::Addr0 => 1 + 1,
+            SFrameFREType::Addr1 => 2 + 1,
+            SFrameFREType::Addr2 => 4 + 1,
+        } as usize;
+        let offset = self.offset;
+        if offset + entry_size > self.section.data.len() {
+            return Err(SFrameError::UnexpectedEndOfData);
+        }
+
+        let (start_address, info) = match self.fde.func_info.get_fre_type()? {
+            SFrameFREType::Addr0 => (
+                SFrameFREStartAddress::U8(self.section.data[offset]),
+                SFrameFREInfo(self.section.data[offset + 1]),
+            ),
+            SFrameFREType::Addr1 => (
+                SFrameFREStartAddress::U16(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    u16,
+                    offset
+                )),
+                SFrameFREInfo(self.section.data[offset + 2]),
+            ),
+            SFrameFREType::Addr2 => (
+                SFrameFREStartAddress::U32(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    u32,
+                    offset
+                )),
+                SFrameFREInfo(self.section.data[offset + 4]),
+            ),
+        };
+
+        let offset_size = info.get_offset_size()?;
+        let offset_count = info.get_offset_count() as usize;
+        let offset_total_size = offset_size * offset_count;
+        if offset + entry_size + offset_total_size > self.section.data.len() {
+            return Err(SFrameError::UnexpectedEndOfData);
+        }
+
+        let mut stack_offsets = vec![];
+        for i in 0..offset_count {
+            match offset_size {
+                1 => stack_offsets.push(SFrameFREStackOffset::I8(
+                    self.section.data[offset + entry_size + i * offset_size] as i8,
+                )),
+                2 => stack_offsets.push(SFrameFREStackOffset::I16(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    i16,
+                    offset + entry_size + i * offset_size
+                ))),
+                4 => stack_offsets.push(SFrameFREStackOffset::I32(read_binary!(
+                    self.section.data,
+                    self.section.little_endian,
+                    i32,
+                    offset + entry_size + i * offset_size
+                ))),
+                _ => unreachable!(),
+            }
+        }
+
+        self.offset += entry_size + offset_total_size;
+        self.index += 1;
+
+        Ok(Some(SFrameFRE {
+            start_address,
+            info,
+            stack_offsets,
+        }))
     }
 }
 

@@ -63,20 +63,20 @@ fn main() -> anyhow::Result<()> {
                                     sp
                                 };
                                 let cfa =
-                                    (base_reg as i64 + fre.stack_offsets[0].get() as i64) as u64;
+                                    (base_reg as i64 + fre.get_cfa_offset().unwrap() as i64) as u64;
 
                                 // new sp
                                 sp = cfa;
 
-                                // amd64: fixed ra offset
-                                let ra_addr =
-                                    (cfa as i64 + parsed.get_cfa_fixed_ra_offset() as i64) as u64;
+                                let ra_addr = (cfa as i64
+                                    + fre.get_ra_offset(&parsed).unwrap() as i64)
+                                    as u64;
                                 // new pc
                                 pc = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0) }
                                     as u64;
 
-                                if let Some(fp_offset) = fre.stack_offsets.get(1) {
-                                    let fp_addr = (cfa as i64 + fp_offset.get() as i64) as u64;
+                                if let Some(fp_offset) = fre.get_fp_offset(&parsed) {
+                                    let fp_addr = (cfa as i64 + fp_offset as i64) as u64;
                                     // new fp
                                     fp = unsafe {
                                         libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0)
