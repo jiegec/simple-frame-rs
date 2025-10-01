@@ -1,5 +1,8 @@
 # simple-frame-rs
 
+![Crates.io Version](https://img.shields.io/crates/v/simple-frame-rs)
+![docs.rs](https://img.shields.io/docsrs/simple-frame-rs)
+
 Rust crate to parse [SFrame](https://sourceware.org/binutils/wiki/sframe) stack trace format.
 
 ## Example
