@@ -614,11 +614,16 @@ impl SFrameFDE {
         pc: u64,
     ) -> SFrameResult<Option<SFrameFRE>> {
         let fde_pc = self.get_pc(section);
+        if pc < fde_pc || pc >= fde_pc + self.func_size as u64 {
+            // out of bounds
+            return Ok(None);
+        }
+
         match self.func_info.get_fde_type()? {
             SFrameFDEType::PCInc => {
                 // find matching fre entry with max pc
                 let mut last: Option<SFrameFRE> = None;
-                let mut iter = self.iter_fre(&section);
+                let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
                     if fre.start_address.get() as u64 + fde_pc > pc {
                         // last is the matching one
@@ -632,11 +637,11 @@ impl SFrameFDE {
                         return Ok(Some(fre));
                     }
                 }
-                return Ok(None);
+                Ok(None)
             }
             SFrameFDEType::PCMask => {
                 // match by pc masking
-                let mut iter = self.iter_fre(&section);
+                let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
                     // PC % REP_BLOCK_SIZE >= FRE_START_ADDR
                     if pc % self.func_rep_size as u64 >= fre.start_address.get() as u64 {
@@ -644,7 +649,7 @@ impl SFrameFDE {
                         return Ok(Some(fre));
                     }
                 }
-                return Ok(None);
+                Ok(None)
             }
         }
     }
@@ -709,7 +714,7 @@ impl SFrameFRE {
     /// Get CFA offset against base reg
     pub fn get_cfa_offset(&self) -> Option<i32> {
         // currently always the first offset
-        self.stack_offsets.get(0).map(|offset| offset.get())
+        self.stack_offsets.first().map(|offset| offset.get())
     }
 
     /// Get RA offset against CFA
