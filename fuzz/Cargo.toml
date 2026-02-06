@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 afl = "0.17"
 libfuzzer-sys = "0.4"
-simple-frame-rs = { path = ".." }
+simple-frame-rs = { path = "../lib" }
 
 [[bin]]
 name = "parse_sframe"
