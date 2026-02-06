@@ -1,0 +1,25 @@
+[package]
+name = "simple-frame-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+afl = "0.17"
+libfuzzer-sys = "0.4"
+simple-frame-rs = { path = ".." }
+
+[[bin]]
+name = "parse_sframe"
+path = "fuzz_targets/parse_sframe.rs"
+
+[[bin]]
+name = "find_fde"
+path = "fuzz_targets/find_fde.rs"
+
+[[bin]]
+name = "find_fre"
+path = "fuzz_targets/find_fre.rs"
