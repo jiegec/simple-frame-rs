@@ -644,7 +644,9 @@ impl SFrameFDE {
                 let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
                     // PC % REP_BLOCK_SIZE >= FRE_START_ADDR
-                    if pc % self.func_rep_size as u64 >= fre.start_address.get() as u64 {
+                    if self.func_rep_size != 0
+                        && pc % self.func_rep_size as u64 >= fre.start_address.get() as u64
+                    {
                         // found
                         return Ok(Some(fre));
                     }
