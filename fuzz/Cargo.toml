@@ -4,12 +4,8 @@ version = "0.0.0"
 publish = false
 edition = "2024"
 
-[package.metadata]
-cargo-fuzz = true
-
 [dependencies]
 afl = "0.17"
-libfuzzer-sys = "0.4"
 simple-frame-rs = { path = "../lib" }
 
 [[bin]]

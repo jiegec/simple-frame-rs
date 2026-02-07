@@ -385,8 +385,7 @@ impl<'a> SFrameSection<'a> {
             let mut iter = self.iter_fde();
             while let Some(fde) = iter.next()? {
                 let start = fde.get_pc(self);
-                let end = start + fde.func_size as u64;
-                if start <= pc && pc < end {
+                if start <= pc && pc - start < fde.func_size as u64 {
                     return Ok(Some(fde));
                 }
             }
@@ -614,7 +613,7 @@ impl SFrameFDE {
         pc: u64,
     ) -> SFrameResult<Option<SFrameFRE>> {
         let fde_pc = self.get_pc(section);
-        if pc < fde_pc || pc >= fde_pc + self.func_size as u64 {
+        if pc < fde_pc || pc - fde_pc >= self.func_size as u64 {
             // out of bounds
             return Ok(None);
         }
