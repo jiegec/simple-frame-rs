@@ -156,6 +156,13 @@ impl<'a> SFrameSection<'a> {
             data[core::mem::offset_of!(RawSFrameHeader, cfa_fixed_ra_offset)] as i8;
         let auxhdr_len = data[core::mem::offset_of!(RawSFrameHeader, auxhdr_len)];
 
+        // initial validation
+        let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32);
+        let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32);
+        if data.len() < fdeoff as usize {
+            return Err(SFrameError::UnexpectedEndOfData);
+        }
+
         Ok(SFrameSection {
             data,
             section_base,
@@ -166,10 +173,10 @@ impl<'a> SFrameSection<'a> {
             cfa_fixed_fp_offset,
             cfa_fixed_ra_offset,
             auxhdr_len,
-            num_fdes: read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32),
+            num_fdes,
             num_fres: read_struct!(RawSFrameHeader, data, little_endian, num_fres, u32),
             fre_len: read_struct!(RawSFrameHeader, data, little_endian, fre_len, u32),
-            fdeoff: read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32),
+            fdeoff,
             freoff: read_struct!(RawSFrameHeader, data, little_endian, freoff, u32),
         })
     }
