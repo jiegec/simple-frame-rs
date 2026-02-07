@@ -159,7 +159,12 @@ impl<'a> SFrameSection<'a> {
         // initial validation
         let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32);
         let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32);
-        if data.len() < fdeoff as usize {
+        if data.len() - core::mem::size_of::<RawSFrameHeader>() < fdeoff as usize {
+            return Err(SFrameError::UnexpectedEndOfData);
+        } else if (data.len() - core::mem::size_of::<RawSFrameHeader>() - fdeoff as usize)
+            / core::mem::size_of::<RawSFrameFDE>()
+            < num_fdes as usize
+        {
             return Err(SFrameError::UnexpectedEndOfData);
         }
 
