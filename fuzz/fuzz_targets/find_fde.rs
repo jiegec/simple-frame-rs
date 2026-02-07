@@ -25,7 +25,7 @@ fn main() {
 
         // Extract PC from first 4 bytes
         let pc = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as u64;
-        let data = &data[8..];
+        let data = &data[4..];
 
         // Parse SFrame data from remaining bytes
         let sframe = match SFrameSection::from(data, section_base) {

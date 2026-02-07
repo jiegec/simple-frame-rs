@@ -578,10 +578,11 @@ impl SFrameFDE {
             .flags
             .contains(SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL)
         {
-            (self.func_start_address as i64 + self.offset as i64 + section.section_base as i64)
-                as u64
+            (self.func_start_address as i64)
+                .wrapping_add_unsigned(self.offset as u64)
+                .wrapping_add_unsigned(section.section_base) as u64
         } else {
-            (self.func_start_address as i64 + section.section_base as i64) as u64
+            (self.func_start_address as i64).wrapping_add_unsigned(section.section_base) as u64
         }
     }
 
