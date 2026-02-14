@@ -1,7 +1,7 @@
 #[cfg(target_os = "linux")]
 fn inner_main() -> anyhow::Result<()> {
     use object::{Object, ObjectSection};
-    use simple_frame_rs::SFrameSection;
+    use simple_frame_rs::v2::SFrameSection;
     use std::mem::MaybeUninit;
 
     for arg in std::env::args().skip(1) {

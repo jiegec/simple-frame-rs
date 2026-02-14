@@ -1,5 +1,5 @@
 use afl::fuzz;
-use simple_frame_rs::SFrameSection;
+use simple_frame_rs::v2::SFrameSection;
 
 /// Fuzz target for SFrameSection::find_fde()
 /// This tests finding FDEs by PC with various inputs

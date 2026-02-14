@@ -2,7 +2,7 @@
 
 use fallible_iterator::FallibleIterator;
 use serde::{Deserialize, Serialize};
-use simple_frame_rs::*;
+use simple_frame_rs::{SFrameError, v2::*};
 use std::iter::zip;
 
 // Test data from simple.json testcase
@@ -49,7 +49,6 @@ fn test_sframe_section_creation() {
 
     let section = result.unwrap();
     assert_eq!(section.get_fde_count(), 3);
-    assert!(matches!(section.get_version(), SFrameVersion::V2));
     assert!(matches!(section.get_abi(), SFrameABI::AMD64LittleEndian));
 }
 
@@ -159,13 +158,6 @@ fn test_sframe_abi_conversion() {
     assert_eq!(SFrameABI::AArch64LittleEndian as u8, 1);
     assert_eq!(SFrameABI::AMD64LittleEndian as u8, 2);
     assert_eq!(SFrameABI::S390XBigEndian as u8, 3);
-}
-
-#[test]
-fn test_sframe_version_conversion() {
-    // Test version conversion from raw values used in parsing
-    assert_eq!(SFrameVersion::V1 as u8, 0); // Rust enums start from 0
-    assert_eq!(SFrameVersion::V2 as u8, 1);
 }
 
 #[test]

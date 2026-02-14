@@ -1,5 +1,5 @@
 use object::{Object, ObjectSection};
-use simple_frame_rs::SFrameSection;
+use simple_frame_rs::v2::SFrameSection;
 
 fn main() -> anyhow::Result<()> {
     for arg in std::env::args().skip(1) {
