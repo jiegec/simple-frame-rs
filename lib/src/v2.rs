@@ -276,22 +276,15 @@ impl<'a> SFrameSection<'a> {
                     Some(offset) => format!("c{:+}", offset),
                     None => "u".to_string(), // without offset
                 };
-                let rest = match self.abi {
-                    SFrameABI::AMD64LittleEndian => {
-                        // https://sourceware.org/binutils/docs-2.45/sframe-spec.html#AMD64
-                        let ra = "f"; // fixed
-                        format!("{cfa:8} {fp:6} {ra}")
+                let ra = if self.cfa_fixed_ra_offset != 0 {
+                    "f".to_string() // fixed
+                } else {
+                    match fre.get_ra_offset(self) {
+                        Some(offset) => format!("c{:+}", offset),
+                        None => "u".to_string(), // without offset
                     }
-                    SFrameABI::AArch64LittleEndian => {
-                        // https://sourceware.org/binutils/docs-2.45/sframe-spec.html#AArch64
-                        let ra = match fre.get_ra_offset(self) {
-                            Some(offset) => format!("c{:+}", offset),
-                            None => "u".to_string(), // without offset
-                        };
-                        format!("{cfa:8} {fp:6} {ra}")
-                    }
-                    _ => todo!(),
                 };
+                let rest = format!("{cfa:8} {fp:6} {ra}");
                 writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
             }
             writeln!(&mut s,)?;
