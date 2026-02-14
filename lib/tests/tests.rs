@@ -288,7 +288,7 @@ fn test_sframe_fre_methods() {
     let fre = fde.iter_fre(&section).next().unwrap().unwrap();
 
     // Test CFA offset
-    let cfa_offset = fre.get_cfa_offset();
+    let cfa_offset = fre.get_cfa_offset(&section);
     assert!(cfa_offset.is_some());
     assert_eq!(cfa_offset.unwrap(), 16);
 

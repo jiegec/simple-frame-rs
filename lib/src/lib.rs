@@ -175,11 +175,18 @@ impl SFrameFRE {
     }
 
     /// Get CFA offset against base reg
-    pub fn get_cfa_offset(&self) -> Option<i32> {
-        match self {
-            SFrameFRE::V1(sframe_fre) => sframe_fre.get_cfa_offset(),
-            SFrameFRE::V2(sframe_fre) => sframe_fre.get_cfa_offset(),
-            SFrameFRE::V3(sframe_fre) => sframe_fre.get_cfa_offset(),
+    pub fn get_cfa_offset(&self, section: &SFrameSection<'_>) -> SFrameResult<Option<i32>> {
+        match (self, section) {
+            (SFrameFRE::V1(sframe_fre), SFrameSection::V1(sframe_section)) => {
+                Ok(sframe_fre.get_cfa_offset(sframe_section))
+            }
+            (SFrameFRE::V2(sframe_fre), SFrameSection::V2(sframe_section)) => {
+                Ok(sframe_fre.get_cfa_offset(sframe_section))
+            }
+            (SFrameFRE::V3(sframe_fre), SFrameSection::V3(sframe_section)) => {
+                Ok(sframe_fre.get_cfa_offset(sframe_section))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
         }
     }
 

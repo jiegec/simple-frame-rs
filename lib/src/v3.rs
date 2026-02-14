@@ -759,7 +759,7 @@ pub struct SFrameFRE {
 
 impl SFrameFRE {
     /// Get CFA offset against base reg
-    pub fn get_cfa_offset(&self) -> Option<i32> {
+    pub fn get_cfa_offset(&self, _section: &SFrameSection<'_>) -> Option<i32> {
         // currently always the first offset
         self.stack_offsets.first().map(|offset| offset.get())
     }

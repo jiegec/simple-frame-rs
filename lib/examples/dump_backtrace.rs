@@ -52,8 +52,9 @@ fn inner_main() -> anyhow::Result<()> {
                             } else {
                                 sp
                             };
-                            let cfa =
-                                (base_reg as i64 + fre.get_cfa_offset().unwrap() as i64) as u64;
+                            let cfa = (base_reg as i64
+                                + fre.get_cfa_offset(&parsed).unwrap().unwrap() as i64)
+                                as u64;
 
                             // new sp
                             sp = cfa;
