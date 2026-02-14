@@ -4,15 +4,15 @@ set -x -e
 # while generate the groundtruth using another binutils from PATH
 SUFFIX=$(uname -m)-$(LANG=C PATH=$CUSTOM_BINUTILS_PATH:$PATH as --version | grep -oP '\d+\.\d+' | head -1)
 echo $SUFFIX
-echo -e "void foo() {}\nvoid bar() {foo();}\nint main() { return 0; }" > test.c
+echo -e "int fib(int n) { if (n == 0 || n == 1) return 1; else return fib(n-1) + fib(n-2); }\nvoid foo() {}\nvoid bar() {foo();}\nint main() { return 0; }" > test.c
 
-PATH=$CUSTOM_BINUTILS_PATH:$PATH gcc -Wa,--gsframe test.c -o test
+PATH=$CUSTOM_BINUTILS_PATH:$PATH gcc -Wa,--gsframe test.c -o test -fomit-frame-pointer
 objdump --sframe test
 cargo run --example dump_sframe test
 cargo run --example create_testcase test
 mv testcases/test.json testcases/test-${SUFFIX}.json
 
-PATH=$CUSTOM_BINUTILS_PATH:$PATH gcc -Wa,--gsframe test.c -o test-fp -fomit-frame-pointer
+PATH=$CUSTOM_BINUTILS_PATH:$PATH gcc -Wa,--gsframe test.c -o test-fp -fno-omit-frame-pointer
 objdump --sframe test-fp
 cargo run --example dump_sframe test-fp
 cargo run --example create_testcase test-fp
