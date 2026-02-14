@@ -87,7 +87,7 @@ impl<'a> SFrameSection<'a> {
                 data,
                 section_base,
             )?)),
-            _ => return Err(SFrameError::UnsupportedVersion),
+            _ => Err(SFrameError::UnsupportedVersion),
         }
     }
 }

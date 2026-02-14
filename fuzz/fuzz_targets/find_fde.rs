@@ -16,7 +16,7 @@ fn main() {
         // Extract section_base from first 8 bytes
         let section_base = u64::from_le_bytes([
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-        ]) as u64;
+        ]);
         let data = &data[8..];
 
         if data.len() < 4 {
