@@ -24,6 +24,42 @@ pub enum SFrameABI {
     S390XBigEndian,
 }
 
+/// s390x-specific constants and helpers from binutils-gdb sframe.h
+///
+/// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#s390x>
+pub mod s390x {
+    /// On s390x, the CFA is defined as SP at call site + 160.
+    /// Therefore the SP value offset from CFA is -160.
+    pub const SFRAME_S390X_SP_VAL_OFFSET: i32 = -160;
+
+    /// On s390x, the CFA offset from CFA base register is by definition a minimum
+    /// of 160. Store it adjusted by -160 to enable use of 8-bit SFrame offsets.
+    pub const SFRAME_S390X_CFA_OFFSET_ADJUSTMENT: i32 = SFRAME_S390X_SP_VAL_OFFSET;
+
+    /// Additionally scale by an alignment factor of 8, as the SP and thus CFA
+    /// offset on s390x is always 8-byte aligned.
+    pub const SFRAME_S390X_CFA_OFFSET_ALIGNMENT_FACTOR: i32 = 8;
+
+    /// Invalid RA offset.  Currently used for s390x as padding to represent FP
+    /// without RA saved.
+    pub const SFRAME_FRE_RA_OFFSET_INVALID: i32 = 0;
+
+    /// Decode a CFA offset from the FRE stored value.
+    pub const fn cfa_offset_decode(offset: i32) -> i32 {
+        (offset * SFRAME_S390X_CFA_OFFSET_ALIGNMENT_FACTOR) - SFRAME_S390X_CFA_OFFSET_ADJUSTMENT
+    }
+
+    /// Check if an offset represents a DWARF register number.
+    pub const fn offset_is_regnum(offset: i32) -> bool {
+        (offset & 1) != 0
+    }
+
+    /// Decode a DWARF register number from an offset.
+    pub const fn offset_decode_regnum(offset: i32) -> i32 {
+        offset >> 1
+    }
+}
+
 bitflags! {
     /// SFrame Flags
     ///
@@ -759,12 +795,23 @@ pub struct SFrameFRE {
 
 impl SFrameFRE {
     /// Get CFA offset against base reg
-    pub fn get_cfa_offset(&self, _section: &SFrameSection<'_>) -> Option<i32> {
-        // currently always the first offset
-        self.stack_offsets.first().map(|offset| offset.get())
+    pub fn get_cfa_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
+        self.stack_offsets.first().map(|offset| {
+            let offset = offset.get();
+            match section.abi {
+                // On s390x, the CFA offset is encoded. Decode it.
+                SFrameABI::S390XBigEndian => s390x::cfa_offset_decode(offset),
+                _ => offset,
+            }
+        })
     }
 
     /// Get RA offset against CFA
+    ///
+    /// For s390x, the returned value may represent:
+    /// - A stack slot offset if the LSB is 0
+    /// - A DWARF register number (encoded as (regnum << 1) | 1) if the LSB is 1
+    /// - SFRAME_FRE_RA_OFFSET_INVALID (0) if RA is not saved
     pub fn get_ra_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
         match section.abi {
             // the second offset for aarch64
@@ -773,22 +820,26 @@ impl SFrameFRE {
             }
             // always fixed for amd64
             SFrameABI::AMD64LittleEndian => Some(section.cfa_fixed_ra_offset as i32),
-            // TODO: stack slot or register number
-            SFrameABI::S390XBigEndian => todo!(),
+            // the second offset for s390x
+            SFrameABI::S390XBigEndian => self.stack_offsets.get(1).map(|offset| offset.get()),
         }
     }
 
     /// Get FP offset against CFA
+    ///
+    /// For s390x, the returned value may represent:
+    /// - A stack slot offset if the LSB is 0
+    /// - A DWARF register number (encoded as (regnum << 1) | 1) if the LSB is 1
     pub fn get_fp_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
         match section.abi {
             // the third offset for aarch64
             SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {
                 self.stack_offsets.get(2).map(|offset| offset.get())
             }
-            // the second offset for aarch64
+            // the second offset for amd64
             SFrameABI::AMD64LittleEndian => self.stack_offsets.get(1).map(|offset| offset.get()),
-            // TODO: stack slot or register number
-            SFrameABI::S390XBigEndian => todo!(),
+            // the third offset for s390x
+            SFrameABI::S390XBigEndian => self.stack_offsets.get(2).map(|offset| offset.get()),
         }
     }
 }
