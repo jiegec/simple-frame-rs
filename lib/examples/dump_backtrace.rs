@@ -1,4 +1,4 @@
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn inner_main() -> anyhow::Result<()> {
     use object::{Object, ObjectSection};
     use simple_frame_rs::v2::SFrameSection;
@@ -94,9 +94,9 @@ fn inner_main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn inner_main() -> anyhow::Result<()> {
-    println!("This example only works on Linux systems");
+    println!("This example only works on Linux x86_64 systems");
     println!("It requires /proc filesystem and ptrace functionality");
     Ok(())
 }
