@@ -266,36 +266,26 @@ impl<'a> SFrameSection<'a> {
                     SFrameFDEType::PCInc => pc + fre.start_address.get() as u64,
                     SFrameFDEType::PCMask => fre.start_address.get() as u64,
                 };
+                let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                    "fp"
+                } else {
+                    "sp"
+                };
+                let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
+                let fp = match fre.get_fp_offset(self) {
+                    Some(offset) => format!("c{:+}", offset),
+                    None => "u".to_string(), // without offset
+                };
                 let rest = match self.abi {
                     SFrameABI::AMD64LittleEndian => {
                         // https://sourceware.org/binutils/docs-2.45/sframe-spec.html#AMD64
-                        let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
-                            "fp"
-                        } else {
-                            "sp"
-                        };
-                        let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
-                        let fp = match fre.stack_offsets.get(1) {
-                            Some(offset) => format!("c{:+}", offset.get()),
-                            None => "u".to_string(), // without offset
-                        };
                         let ra = "f"; // fixed
                         format!("{cfa:8} {fp:6} {ra}")
                     }
                     SFrameABI::AArch64LittleEndian => {
                         // https://sourceware.org/binutils/docs-2.45/sframe-spec.html#AArch64
-                        let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
-                            "fp"
-                        } else {
-                            "sp"
-                        };
-                        let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
-                        let fp = match fre.stack_offsets.get(1) {
-                            Some(offset) => format!("c{:+}", offset.get()),
-                            None => "u".to_string(), // without offset
-                        };
-                        let ra = match fre.stack_offsets.get(2) {
-                            Some(offset) => format!("c{:+}", offset.get()),
+                        let ra = match fre.get_ra_offset(self) {
+                            Some(offset) => format!("c{:+}", offset),
                             None => "u".to_string(), // without offset
                         };
                         format!("{cfa:8} {fp:6} {ra}")
