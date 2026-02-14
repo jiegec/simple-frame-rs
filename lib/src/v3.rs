@@ -495,7 +495,7 @@ pub struct SFrameFDEInfo2(u8);
 
 impl SFrameFDEInfo2 {
     /// Get SFrame FDE type
-    pub fn get_fde_pctype(&self) -> SFrameResult<SFrameFDEType> {
+    pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
         let fdetype = self.0 & 0b11111;
         match fdetype {
             0 => Ok(SFrameFDEType::Default),
