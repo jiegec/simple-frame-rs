@@ -3,7 +3,7 @@ set -x -e
 
 git checkout binutils-2_40
 rm -rf * && ../configure --prefix=$HOME/prefix/binutils-2_40 --disable-gdb && make -j16 && make install -j16
-git checkout binutils-2_41
+git checkout binutils-2_41-release
 rm -rf * && ../configure --prefix=$HOME/prefix/binutils-2_41 --disable-gdb && make -j16 && make install -j16
 git checkout binutils-2_42
 rm -rf * && ../configure --prefix=$HOME/prefix/binutils-2_42 --disable-gdb && make -j16 && make install -j16
