@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -x -e
 SUFFIX=$(uname -m)-$(LANG=C as --version | grep -oP '\d+\.\d+' | head -1)
 echo $SUFFIX

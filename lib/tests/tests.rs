@@ -468,7 +468,13 @@ fn test() {
         let lines_actual: Vec<&str> = s.trim().split("\n").collect();
 
         // compare line by line
-        assert_eq!(lines_expected.len(), lines_actual.len());
+        assert_eq!(
+            lines_expected.len(),
+            lines_actual.len(),
+            "Expected:\n{}\nActual:\n{}",
+            testcase.groundtruth,
+            s
+        );
         for (expected, actual) in zip(lines_expected, lines_actual) {
             let parts_expected: Vec<&str> =
                 expected.trim().split(" ").filter(|s| s.len() > 0).collect();
