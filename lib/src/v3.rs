@@ -646,6 +646,11 @@ pub struct SFrameFDE {
 }
 
 impl SFrameFDE {
+    /// Get the FDE type (Default or Flex)
+    pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
+        self.func_info2.get_fde_type()
+    }
+
     /// Compute pc of the function
     pub fn get_pc(&self, section: &SFrameSection<'_>) -> u64 {
         // "If the flag SFRAME_F_FDE_FUNC_START_PCREL, See SFrame Flags, in the
@@ -793,8 +798,72 @@ pub struct SFrameFRE {
     pub stack_offsets: Vec<SFrameFREStackOffset>,
 }
 
+/// Flex FDE Control Data Word
+///
+/// For flexible FDE types (SFRAME_FDE_TYPE_FLEX), the variable-length bytes
+/// trailing an SFrame FRE are interpreted as pairs of Control Data and Offset
+/// Data for each tracked entity (CFA, RA, FP).
+///
+/// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#Flexible-FDE-Type-Interpretation>
+#[derive(Debug, Clone, Copy)]
+pub struct SFrameFlexControlData {
+    /// The raw control data value
+    value: i32,
+}
+
+impl SFrameFlexControlData {
+    /// Create a new Control Data from raw value
+    pub fn new(value: i32) -> Self {
+        Self { value }
+    }
+
+    /// Check if this is a padding data word (value is 0)
+    ///
+    /// A value of 0 indicates that no further data words follow for the
+    /// tracked entity, meaning the fixed offsets apply or the entity is absent.
+    pub fn is_padding(&self) -> bool {
+        self.value == 0
+    }
+
+    /// Register-based Location Rule
+    ///
+    /// If true, the base is a DWARF register (encoded in regnum bits).
+    /// If false, the base is the CFA (used for RA/FP recovery).
+    pub fn reg_p(&self) -> bool {
+        (self.value & 0b1) != 0
+    }
+
+    /// Dereference Flag
+    ///
+    /// If true, the location of the value is the address (Base + Offset):
+    ///   value = *(Base + Offset)
+    /// If false, the value is (Base + Offset).
+    pub fn deref_p(&self) -> bool {
+        (self.value & 0b10) != 0
+    }
+
+    /// DWARF register number used as the base
+    ///
+    /// Effective only if reg_p is true.
+    pub fn regnum(&self) -> i32 {
+        self.value >> 3
+    }
+}
+
+/// Flex FDE Recovery Rule
+///
+/// Contains the control and offset data for recovering a tracked entity
+/// (CFA, RA, or FP) in a flexible FDE.
+#[derive(Debug, Clone, Copy)]
+pub struct SFrameFlexRecoveryRule {
+    /// Control data word
+    pub control: SFrameFlexControlData,
+    /// Offset data (signed offset to be added to the base)
+    pub offset: i32,
+}
+
 impl SFrameFRE {
-    /// Get CFA offset against base reg
+    /// Get CFA offset against base reg (for Default FDE type)
     pub fn get_cfa_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
         self.stack_offsets.first().map(|offset| {
             let offset = offset.get();
@@ -806,7 +875,7 @@ impl SFrameFRE {
         })
     }
 
-    /// Get RA offset against CFA
+    /// Get RA offset against CFA (for Default FDE type)
     ///
     /// For s390x, the returned value may represent:
     /// - A stack slot offset if the LSB is 0
@@ -825,7 +894,7 @@ impl SFrameFRE {
         }
     }
 
-    /// Get FP offset against CFA
+    /// Get FP offset against CFA (for Default FDE type)
     ///
     /// For s390x, the returned value may represent:
     /// - A stack slot offset if the LSB is 0
@@ -842,6 +911,70 @@ impl SFrameFRE {
             SFrameABI::S390XBigEndian => self.stack_offsets.get(2).map(|offset| offset.get()),
         }
     }
+
+    /// Get Flex FDE recovery rules
+    ///
+    /// For flexible FDE types, returns the recovery rules for CFA, RA, and FP.
+    /// Each rule consists of a Control Data word and an Offset Data word.
+    ///
+    /// Returns None if the FDE is not a Flex FDE type or if the data is invalid.
+    pub fn get_flex_recovery_rules(&self) -> Option<SFrameFlexRecoveryRules> {
+        let data_words: Vec<i32> = self.stack_offsets.iter().map(|o| o.get()).collect();
+
+        // Parse CFA recovery rule (always present)
+        let cfa_control = SFrameFlexControlData::new(*data_words.get(0)?);
+        let cfa_offset = *data_words.get(1)?;
+        let cfa = SFrameFlexRecoveryRule {
+            control: cfa_control,
+            offset: cfa_offset,
+        };
+
+        // Parse RA recovery rule (if present)
+        let mut ra = None;
+        if data_words.len() >= 4 {
+            let ra_control = SFrameFlexControlData::new(*data_words.get(2)?);
+            if !ra_control.is_padding() {
+                ra = Some(SFrameFlexRecoveryRule {
+                    control: ra_control,
+                    offset: *data_words.get(3)?,
+                });
+            }
+        }
+
+        // Parse FP recovery rule (if present)
+        let mut fp = None;
+        if ra.is_some() && data_words.len() >= 6 {
+            let fp_control = SFrameFlexControlData::new(*data_words.get(4)?);
+            if !fp_control.is_padding() {
+                fp = Some(SFrameFlexRecoveryRule {
+                    control: fp_control,
+                    offset: *data_words.get(5)?,
+                });
+            }
+        } else if ra.is_none() && data_words.len() >= 5 {
+            // RA was padding, check if FP follows directly
+            let fp_control = SFrameFlexControlData::new(*data_words.get(3)?);
+            if !fp_control.is_padding() {
+                fp = Some(SFrameFlexRecoveryRule {
+                    control: fp_control,
+                    offset: *data_words.get(4)?,
+                });
+            }
+        }
+
+        Some(SFrameFlexRecoveryRules { cfa, ra, fp })
+    }
+}
+
+/// Flex FDE Recovery Rules for all tracked entities
+#[derive(Debug, Clone)]
+pub struct SFrameFlexRecoveryRules {
+    /// CFA recovery rule (always present)
+    pub cfa: SFrameFlexRecoveryRule,
+    /// RA recovery rule (None if padding)
+    pub ra: Option<SFrameFlexRecoveryRule>,
+    /// FP recovery rule (None if padding)
+    pub fp: Option<SFrameFlexRecoveryRule>,
 }
 
 /// SFrame FRE Info Word
