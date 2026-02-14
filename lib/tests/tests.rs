@@ -454,8 +454,16 @@ fn test() {
         let entry = entry.unwrap();
         let testcase: Testcase =
             serde_json::from_reader(std::fs::File::open(entry.path()).unwrap()).unwrap();
-        let section = crate::SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
-        let s = section.to_string().unwrap();
+        let section =
+            simple_frame_rs::SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
+        let s = match section {
+            simple_frame_rs::SFrameSection::V1(sframe_section) => {
+                sframe_section.to_string().unwrap()
+            }
+            simple_frame_rs::SFrameSection::V2(sframe_section) => {
+                sframe_section.to_string().unwrap()
+            }
+        };
         let mut lines_expected: Vec<&str> = testcase.groundtruth.trim().split("\n").collect();
 
         // drop prefix
@@ -482,8 +490,8 @@ fn test() {
                 actual.trim().split(" ").filter(|s| s.len() > 0).collect();
             assert_eq!(
                 parts_expected, parts_actual,
-                "\"{}\"({:?}) != \"{}\"({:?})",
-                expected, parts_expected, actual, parts_actual,
+                "\"{}\"({:?}) != \"{}\"({:?})\nExpected:\n{}\nActual:\n{}",
+                expected, parts_expected, actual, parts_actual, testcase.groundtruth, s
             );
         }
     }

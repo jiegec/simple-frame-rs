@@ -217,20 +217,6 @@ impl<'a> SFrameSection<'a> {
                 .collect::<Vec<_>>()
                 .join(" | ")
         )?;
-        if self.cfa_fixed_fp_offset != 0 {
-            writeln!(
-                &mut s,
-                "  CFA fixed FP offset: {:?}",
-                self.cfa_fixed_fp_offset
-            )?;
-        }
-        if self.cfa_fixed_ra_offset != 0 {
-            writeln!(
-                &mut s,
-                "  CFA fixed RA offset: {:?}",
-                self.cfa_fixed_ra_offset
-            )?;
-        }
         writeln!(&mut s, "  Num FDEs: {:?}", self.num_fdes)?;
         writeln!(&mut s, "  Num FREs: {:?}", self.num_fres)?;
         writeln!(&mut s)?;
@@ -266,12 +252,12 @@ impl<'a> SFrameSection<'a> {
                 };
                 let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
                 let fp = match fre.get_fp_offset(self) {
-                    Some(offset) => format!("c{:+}", offset),
-                    None => "u".to_string(), // without offset
+                    Some(offset) if self.cfa_fixed_fp_offset == 0 => format!("c{:+}", offset),
+                    _ => "u".to_string(), // without offset
                 };
                 let ra = match fre.get_ra_offset(self) {
-                    Some(offset) => format!("c{:+}", offset),
-                    None => "u".to_string(), // without offset
+                    Some(offset) if self.cfa_fixed_ra_offset == 0 => format!("c{:+}", offset),
+                    _ => "u".to_string(), // without offset
                 };
                 let rest = format!("{cfa:8} {fp:6} {ra}");
                 writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
