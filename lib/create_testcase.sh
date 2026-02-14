@@ -2,7 +2,7 @@
 set -x -e
 SUFFIX=$(uname -m)-$(LANG=C as --version | grep -oP '\d+\.\d+' | head -1)
 echo $SUFFIX
-echo "void foo() {}\nvoid bar() {foo();}\nint main() { return 0; }" > test.c
+echo -e "void foo() {}\nvoid bar() {foo();}\nint main() { return 0; }" > test.c
 
 gcc -Wa,--gsframe test.c -o test
 objdump --sframe test
