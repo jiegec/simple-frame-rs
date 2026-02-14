@@ -501,7 +501,7 @@ pub struct SFrameFDE {
     pub func_start_fre_off: u32,
     /// Unsigned 32-bit integral field specifying the total number of SFrame FREs used for the function.
     pub func_num_fres: u32,
-    /// 	The SFrame FDE info word. See The SFrame FDE info word.
+    /// The SFrame FDE info word. See The SFrame FDE info word.
     pub func_info: SFrameFDEInfo,
 }
 
@@ -646,26 +646,26 @@ impl SFrameFRE {
 
     /// Get RA offset against CFA
     pub fn get_ra_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
-        match section.abi {
-            // the second offset for aarch64
-            SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {
-                self.stack_offsets.get(1).map(|offset| offset.get())
-            }
-            // always fixed for amd64
-            SFrameABI::AMD64LittleEndian => Some(section.cfa_fixed_ra_offset as i32),
+        // case 1: RA offset is fixed
+        if section.cfa_fixed_ra_offset != 0 {
+            return Some(section.cfa_fixed_ra_offset as i32);
         }
+        // case 2: RA offset is saved
+        return self.stack_offsets.get(1).map(|offset| offset.get());
     }
 
     /// Get FP offset against CFA
     pub fn get_fp_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
-        match section.abi {
-            // the third offset for aarch64
-            SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {
-                self.stack_offsets.get(2).map(|offset| offset.get())
-            }
-            // the second offset for aarch64
-            SFrameABI::AMD64LittleEndian => self.stack_offsets.get(1).map(|offset| offset.get()),
+        // case 1: FP offset is fixed
+        if section.cfa_fixed_fp_offset != 0 {
+            return Some(section.cfa_fixed_fp_offset as i32);
         }
+        // case 2: RA offset is fixed, only FP offset is saved
+        if section.cfa_fixed_ra_offset != 0 {
+            return self.stack_offsets.get(1).map(|offset| offset.get());
+        }
+        // case 3: both FP and RA offsets are saved
+        return self.stack_offsets.get(2).map(|offset| offset.get());
     }
 }
 
