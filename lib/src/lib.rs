@@ -104,6 +104,116 @@ impl<'a> SFrameSection<'a> {
             _ => Err(SFrameError::UnsupportedVersion),
         }
     }
+
+    pub fn find_fde(&self, pc: u64) -> SFrameResult<Option<SFrameFDE>> {
+        match self {
+            SFrameSection::V1(sframe_section) => {
+                Ok(sframe_section.find_fde(pc)?.map(SFrameFDE::V1))
+            }
+            SFrameSection::V2(sframe_section) => {
+                Ok(sframe_section.find_fde(pc)?.map(SFrameFDE::V2))
+            }
+            SFrameSection::V3(sframe_section) => {
+                Ok(sframe_section.find_fde(pc)?.map(SFrameFDE::V3))
+            }
+        }
+    }
+}
+
+/// SFrame FDE
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Function-Descriptor-Entries>
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum SFrameFDE {
+    V1(v1::SFrameFDE),
+    V2(v2::SFrameFDE),
+    V3(v3::SFrameFDE),
+}
+
+impl SFrameFDE {
+    /// Find FRE entry by pc
+    pub fn find_fre(
+        &self,
+        section: &SFrameSection<'_>,
+        pc: u64,
+    ) -> SFrameResult<Option<SFrameFRE>> {
+        match (self, section) {
+            (SFrameFDE::V1(sframe_fde), SFrameSection::V1(sframe_section)) => {
+                Ok(sframe_fde.find_fre(sframe_section, pc)?.map(SFrameFRE::V1))
+            }
+            (SFrameFDE::V2(sframe_fde), SFrameSection::V2(sframe_section)) => {
+                Ok(sframe_fde.find_fre(sframe_section, pc)?.map(SFrameFRE::V2))
+            }
+            (SFrameFDE::V3(sframe_fde), SFrameSection::V3(sframe_section)) => {
+                Ok(sframe_fde.find_fre(sframe_section, pc)?.map(SFrameFRE::V3))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+}
+
+/// SFrame FRE
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Frame-Row-Entries>
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum SFrameFRE {
+    V1(v1::SFrameFRE),
+    V2(v2::SFrameFRE),
+    V3(v3::SFrameFRE),
+}
+
+impl SFrameFRE {
+    /// Distinguish between SP or FP based CFA recovery.
+    pub fn get_cfa_base_reg_id(&self) -> u8 {
+        match self {
+            SFrameFRE::V1(sframe_fre) => sframe_fre.info.get_cfa_base_reg_id(),
+            SFrameFRE::V2(sframe_fre) => sframe_fre.info.get_cfa_base_reg_id(),
+            SFrameFRE::V3(sframe_fre) => sframe_fre.info.get_cfa_base_reg_id(),
+        }
+    }
+
+    /// Get CFA offset against base reg
+    pub fn get_cfa_offset(&self) -> Option<i32> {
+        match self {
+            SFrameFRE::V1(sframe_fre) => sframe_fre.get_cfa_offset(),
+            SFrameFRE::V2(sframe_fre) => sframe_fre.get_cfa_offset(),
+            SFrameFRE::V3(sframe_fre) => sframe_fre.get_cfa_offset(),
+        }
+    }
+
+    /// Get RA offset against CFA
+    pub fn get_ra_offset(&self, section: &SFrameSection<'_>) -> SFrameResult<Option<i32>> {
+        match (self, section) {
+            (SFrameFRE::V1(sframe_fre), SFrameSection::V1(sframe_section)) => {
+                Ok(sframe_fre.get_ra_offset(sframe_section))
+            }
+            (SFrameFRE::V2(sframe_fre), SFrameSection::V2(sframe_section)) => {
+                Ok(sframe_fre.get_ra_offset(sframe_section))
+            }
+            (SFrameFRE::V3(sframe_fre), SFrameSection::V3(sframe_section)) => {
+                Ok(sframe_fre.get_ra_offset(sframe_section))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+
+    /// Get FP offset against CFA
+    pub fn get_fp_offset(&self, section: &SFrameSection<'_>) -> SFrameResult<Option<i32>> {
+        match (self, section) {
+            (SFrameFRE::V1(sframe_fre), SFrameSection::V1(sframe_section)) => {
+                Ok(sframe_fre.get_fp_offset(sframe_section))
+            }
+            (SFrameFRE::V2(sframe_fre), SFrameSection::V2(sframe_section)) => {
+                Ok(sframe_fre.get_fp_offset(sframe_section))
+            }
+            (SFrameFRE::V3(sframe_fre), SFrameSection::V3(sframe_section)) => {
+                Ok(sframe_fre.get_fp_offset(sframe_section))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
 }
 
 /// Error types for the crate

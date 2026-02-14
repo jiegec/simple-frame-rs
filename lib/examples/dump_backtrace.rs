@@ -1,7 +1,7 @@
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn inner_main() -> anyhow::Result<()> {
     use object::{Object, ObjectSection};
-    use simple_frame_rs::v2::SFrameSection;
+    use simple_frame_rs::SFrameSection;
     use std::mem::MaybeUninit;
 
     for arg in std::env::args().skip(1) {
@@ -47,7 +47,7 @@ fn inner_main() -> anyhow::Result<()> {
                     // find fre by pc
                     if let Some(fde) = parsed.find_fde(pc)? {
                         if let Some(fre) = fde.find_fre(&parsed, pc)? {
-                            let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                            let base_reg = if fre.get_cfa_base_reg_id() == 0 {
                                 fp
                             } else {
                                 sp
@@ -58,13 +58,14 @@ fn inner_main() -> anyhow::Result<()> {
                             // new sp
                             sp = cfa;
 
-                            let ra_addr =
-                                (cfa as i64 + fre.get_ra_offset(&parsed).unwrap() as i64) as u64;
+                            let ra_addr = (cfa as i64
+                                + fre.get_ra_offset(&parsed).unwrap().unwrap() as i64)
+                                as u64;
                             // new pc
                             pc = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, ra_addr, 0) }
                                 as u64;
 
-                            if let Some(fp_offset) = fre.get_fp_offset(&parsed) {
+                            if let Some(fp_offset) = fre.get_fp_offset(&parsed).unwrap() {
                                 let fp_addr = (cfa as i64 + fp_offset as i64) as u64;
                                 // new fp
                                 fp = unsafe { libc::ptrace(libc::PTRACE_PEEKDATA, pid, fp_addr, 0) }
