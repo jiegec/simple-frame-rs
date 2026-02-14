@@ -2,6 +2,7 @@
 set -x -e
 
 git checkout binutils-2_40
+rm -f ../gas/doc/.dirstamp
 rm -rf * && ../configure --prefix=$HOME/prefix/binutils-2_40 --disable-gdb && make -j16 && make install -j16
 git checkout binutils-2_41-release
 rm -rf * && ../configure --prefix=$HOME/prefix/binutils-2_41 --disable-gdb && make -j16 && make install -j16
