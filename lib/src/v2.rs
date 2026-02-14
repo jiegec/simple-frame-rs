@@ -222,7 +222,7 @@ impl<'a> SFrameSection<'a> {
                 .iter_names()
                 .map(|(name, _flag)| name)
                 .collect::<Vec<_>>()
-                .join(",\n           ")
+                .join(",\n         ")
         )?;
         if self.cfa_fixed_fp_offset != 0 {
             writeln!(
