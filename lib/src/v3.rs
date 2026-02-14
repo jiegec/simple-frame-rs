@@ -503,8 +503,8 @@ pub struct SFrameFDEInfo2(u8);
 impl SFrameFDEInfo2 {
     /// Get SFrame FDE type
     pub fn get_fde_pctype(&self) -> SFrameResult<SFrameFDEType> {
-        let fretype = self.0 & 0b1111;
-        match fretype {
+        let fdetype = self.0 & 0b11111;
+        match fdetype {
             0 => Ok(SFrameFDEType::Default),
             1 => Ok(SFrameFDEType::Flex),
             _ => Err(SFrameError::UnsupportedFDEType),
