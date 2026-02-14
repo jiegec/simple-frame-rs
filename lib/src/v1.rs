@@ -388,6 +388,8 @@ struct RawSFrameFDE {
 
 /// SFrame FDE Info Word
 ///
+/// Note: Bits 6-7 are unused per spec, but not validated to allow for future extensions.
+///
 /// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#The-SFrame-FDE-Info-Word>
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
