@@ -58,6 +58,14 @@ struct RawSFramePreamble {
 }
 
 impl<'a> SFrameSection<'a> {
+    /// Print the section in string in the same way as objdump
+    pub fn to_string(&self) -> SFrameResult<String> {
+        match self {
+            SFrameSection::V1(sframe_section) => sframe_section.to_string(),
+            SFrameSection::V2(sframe_section) => sframe_section.to_string(),
+            SFrameSection::V3(sframe_section) => sframe_section.to_string(),
+        }
+    }
     /// Parse SFrame section from data
     pub fn from(data: &'a [u8], section_base: u64) -> SFrameResult<SFrameSection<'a>> {
         // parse sframe_header

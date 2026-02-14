@@ -10,17 +10,7 @@ fn main() -> anyhow::Result<()> {
                 let section_base = section.address();
                 let content = section.data()?;
                 let parsed = SFrameSection::from(content, section_base)?;
-                match parsed {
-                    SFrameSection::V1(sframe_section) => {
-                        println!("{}", sframe_section.to_string()?)
-                    }
-                    SFrameSection::V2(sframe_section) => {
-                        println!("{}", sframe_section.to_string()?)
-                    }
-                    SFrameSection::V3(sframe_section) => {
-                        println!("{}", sframe_section.to_string()?)
-                    }
-                }
+                println!("{}", parsed.to_string()?)
             }
         }
     }

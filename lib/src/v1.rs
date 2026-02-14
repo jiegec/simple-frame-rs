@@ -618,7 +618,7 @@ impl SFrameFRE {
             return Some(section.cfa_fixed_ra_offset as i32);
         }
         // case 2: RA offset is saved
-        return self.stack_offsets.get(1).map(|offset| offset.get());
+        self.stack_offsets.get(1).map(|offset| offset.get())
     }
 
     /// Get FP offset against CFA
@@ -632,7 +632,7 @@ impl SFrameFRE {
             return self.stack_offsets.get(1).map(|offset| offset.get());
         }
         // case 3: both FP and RA offsets are saved
-        return self.stack_offsets.get(2).map(|offset| offset.get());
+        self.stack_offsets.get(2).map(|offset| offset.get())
     }
 }
 

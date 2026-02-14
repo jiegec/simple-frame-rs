@@ -456,17 +456,7 @@ fn test() {
             serde_json::from_reader(std::fs::File::open(entry.path()).unwrap()).unwrap();
         let section =
             simple_frame_rs::SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
-        let s = match section {
-            simple_frame_rs::SFrameSection::V1(sframe_section) => {
-                sframe_section.to_string().unwrap()
-            }
-            simple_frame_rs::SFrameSection::V2(sframe_section) => {
-                sframe_section.to_string().unwrap()
-            }
-            simple_frame_rs::SFrameSection::V3(sframe_section) => {
-                sframe_section.to_string().unwrap()
-            }
-        };
+        let s = section.to_string().unwrap();
         let mut lines_expected: Vec<&str> = testcase.groundtruth.trim().split("\n").collect();
 
         // drop prefix
