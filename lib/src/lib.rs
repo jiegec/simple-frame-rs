@@ -9,6 +9,7 @@ use thiserror::Error;
 
 pub mod v1;
 pub mod v2;
+pub mod v3;
 
 #[macro_export]
 macro_rules! read_binary {
@@ -40,6 +41,7 @@ pub type SFrameResult<T> = core::result::Result<T, SFrameError>;
 pub enum SFrameSection<'a> {
     V1(v1::SFrameSection<'a>),
     V2(v2::SFrameSection<'a>),
+    V3(v3::SFrameSection<'a>),
 }
 
 /// The magic number for SFrame section: 0xdee2
@@ -87,6 +89,10 @@ impl<'a> SFrameSection<'a> {
                 data,
                 section_base,
             )?)),
+            3 => Ok(SFrameSection::V3(v3::SFrameSection::from(
+                data,
+                section_base,
+            )?)),
             _ => Err(SFrameError::UnsupportedVersion),
         }
     }
@@ -122,4 +128,7 @@ pub enum SFrameError {
     /// Unsupported FRE stack offset size
     #[error("unsupported fre stack offset size")]
     UnsupportedFREStackOffsetSize,
+    /// Unsupported FRE data word size
+    #[error("unsupported fre data word size")]
+    UnsupportedFREDataWordSize,
 }

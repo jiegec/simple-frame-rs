@@ -17,6 +17,9 @@ fn main() -> anyhow::Result<()> {
                     SFrameSection::V2(sframe_section) => {
                         println!("{}", sframe_section.to_string()?)
                     }
+                    SFrameSection::V3(sframe_section) => {
+                        println!("{}", sframe_section.to_string()?)
+                    }
                 }
             }
         }

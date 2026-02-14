@@ -323,7 +323,7 @@ fn test_sframe_fde_info() {
 
         // Test FRE type
         let fre_type = info.get_fre_type().unwrap();
-        assert!(matches!(fre_type, SFrameFREType::Addr0)); // All use Addr0 in test data
+        assert!(matches!(fre_type, SFrameFREType::Addr1)); // All use Addr1 in test data
     }
 }
 
@@ -461,6 +461,9 @@ fn test() {
                 sframe_section.to_string().unwrap()
             }
             simple_frame_rs::SFrameSection::V2(sframe_section) => {
+                sframe_section.to_string().unwrap()
+            }
+            simple_frame_rs::SFrameSection::V3(sframe_section) => {
                 sframe_section.to_string().unwrap()
             }
         };

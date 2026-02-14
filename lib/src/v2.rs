@@ -418,9 +418,9 @@ impl SFrameFDEInfo {
     pub fn get_fre_type(&self) -> SFrameResult<SFrameFREType> {
         let fretype = self.0 & 0b1111;
         match fretype {
-            0 => Ok(SFrameFREType::Addr0),
-            1 => Ok(SFrameFREType::Addr1),
-            2 => Ok(SFrameFREType::Addr2),
+            0 => Ok(SFrameFREType::Addr1),
+            1 => Ok(SFrameFREType::Addr2),
+            2 => Ok(SFrameFREType::Addr4),
             _ => Err(SFrameError::UnsupportedFREType),
         }
     }
@@ -451,18 +451,18 @@ impl SFrameFDEInfo {
 /// Ref: <https://sourceware.org/binutils/docs-2.45/sframe-spec.html#The-SFrame-FRE-Types>
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFREType {
-    /// SFRAME_FRE_TYPE_ADDR0
-    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 8-bit value.
-    Addr0,
     /// SFRAME_FRE_TYPE_ADDR1
     /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 16-bit value.
+    /// 8-bit value.
     Addr1,
     /// SFRAME_FRE_TYPE_ADDR2
     /// The start address offset (in bytes) of the SFrame FRE is an unsigned
-    /// 32-bit value.
+    /// 16-bit value.
     Addr2,
+    /// SFRAME_FRE_TYPE_ADDR4
+    /// The start address offset (in bytes) of the SFrame FRE is an unsigned
+    /// 32-bit value.
+    Addr4,
 }
 
 /// SFrame FDE Types
@@ -730,7 +730,7 @@ impl SFrameFREInfo {
 
     /// The number of stack offsets in the FRE
     pub fn get_offset_count(&self) -> u8 {
-        (self.0 >> 1) & 0b111
+        (self.0 >> 1) & 0b1111
     }
 
     /// Distinguish between SP or FP based CFA recovery.
@@ -758,9 +758,9 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
 
         let fre_type = self.fde.func_info.get_fre_type()?;
         let entry_size = match fre_type {
-            SFrameFREType::Addr0 => 1 + 1,
-            SFrameFREType::Addr1 => 2 + 1,
-            SFrameFREType::Addr2 => 4 + 1,
+            SFrameFREType::Addr1 => 1 + 1,
+            SFrameFREType::Addr2 => 2 + 1,
+            SFrameFREType::Addr4 => 4 + 1,
         } as usize;
         let offset = self.offset;
         if offset + entry_size > self.section.data.len() {
@@ -768,11 +768,11 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
         }
 
         let (start_address, info) = match self.fde.func_info.get_fre_type()? {
-            SFrameFREType::Addr0 => (
+            SFrameFREType::Addr1 => (
                 SFrameFREStartAddress::U8(self.section.data[offset]),
                 SFrameFREInfo(self.section.data[offset + 1]),
             ),
-            SFrameFREType::Addr1 => (
+            SFrameFREType::Addr2 => (
                 SFrameFREStartAddress::U16(read_binary!(
                     self.section.data,
                     self.section.little_endian,
@@ -781,7 +781,7 @@ impl<'a> FallibleIterator for SFrameFREIterator<'a> {
                 )),
                 SFrameFREInfo(self.section.data[offset + 2]),
             ),
-            SFrameFREType::Addr2 => (
+            SFrameFREType::Addr4 => (
                 SFrameFREStartAddress::U32(read_binary!(
                     self.section.data,
                     self.section.little_endian,

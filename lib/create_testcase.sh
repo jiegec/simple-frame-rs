@@ -1,5 +1,7 @@
 #!/bin/bash
 set -x -e
+# you can generate sframe using one binutils from CUSTOM_BINUTILS_PATH
+# while generate the groundtruth using another binutils from PATH
 SUFFIX=$(uname -m)-$(LANG=C PATH=$CUSTOM_BINUTILS_PATH:$PATH as --version | grep -oP '\d+\.\d+' | head -1)
 echo $SUFFIX
 echo -e "void foo() {}\nvoid bar() {foo();}\nint main() { return 0; }" > test.c
