@@ -168,7 +168,6 @@ impl<'a> SFrameSection<'a> {
         }
 
         Ok(Some(SFrameFDE {
-            offset,
             func_start_address: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
@@ -494,8 +493,6 @@ pub enum SFrameAArch64PAuthKey {
 /// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#SFrame-Function-Descriptor-Entries>
 #[derive(Debug, Clone, Copy)]
 pub struct SFrameFDE {
-    /// Offset from the beginning of sframe section
-    offset: usize,
     /// Signed 32-bit integral field denoting the virtual memory address of the described function.
     pub func_start_address: i32,
     /// Unsigned 32-bit integral field specifying the size of the function in bytes.
