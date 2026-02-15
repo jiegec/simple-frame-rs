@@ -214,7 +214,7 @@ impl<'a> SFrameSection<'a> {
                 .iter_names()
                 .map(|(name, _flag)| name)
                 .collect::<Vec<_>>()
-                .join(" | ")
+                .join(",\n         ")
         )?;
         writeln!(&mut s, "  Num FDEs: {:?}", self.num_fdes)?;
         writeln!(&mut s, "  Num FREs: {:?}", self.num_fres)?;
@@ -230,6 +230,7 @@ impl<'a> SFrameSection<'a> {
             if let SFrameAArch64PAuthKey::KeyB = fde.func_info.get_aarch64_pauth_key()? {
                 suffix += ", pauth = B key";
             }
+
             writeln!(
                 &mut s,
                 "  func idx [{i}]: pc = 0x{:x}, size = {} bytes{}",
@@ -314,7 +315,7 @@ impl<'a> SFrameSection<'a> {
             let base_pc = base_fde.get_pc(self);
             let cmp = base_pc.cmp(&pc);
             match cmp {
-                Ordering::Equal | Ordering::Less if pc < base_pc + base_fde.func_size as u64 => {
+                Ordering::Equal | Ordering::Less if pc - base_pc < base_fde.func_size as u64 => {
                     Ok(Some(base_fde))
                 }
                 _ => Ok(None),
@@ -395,7 +396,7 @@ struct RawSFrameFDE {
 
 /// SFrame FDE Info Word
 ///
-/// Note: Bits 6-7 are unused per spec, but not validated to allow for future extensions.
+/// Note: Bits 6-7 are unused per spec, but not validated.
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#The-SFrame-FDE-Info-Word>
 #[derive(Debug, Clone, Copy)]
@@ -548,7 +549,7 @@ impl SFrameFDE {
                 let mut last: Option<SFrameFRE> = None;
                 let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
-                    if fre.start_address.get() as u64 + fde_pc > pc {
+                    if fre.start_address.get() as u64 > pc - fde_pc {
                         // last is the matching one
                         break;
                     }
@@ -556,7 +557,7 @@ impl SFrameFDE {
                 }
                 if let Some(fre) = last {
                     // PC >= FRE_START_ADDR
-                    if fre.start_address.get() as u64 + fde_pc <= pc {
+                    if fre.start_address.get() as u64 <= pc - fde_pc {
                         return Ok(Some(fre));
                     }
                 }
