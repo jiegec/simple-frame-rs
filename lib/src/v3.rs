@@ -68,14 +68,23 @@ pub struct SFrameSection<'a> {
     section_base: u64,
     little_endian: bool,
     flags: SFrameFlags,
+    /// The ABI/arch identifier. See SFrame ABI/arch identifier.
     abi: SFrameABI,
+    /// The CFA fixed FP offset, if any.
     cfa_fixed_fp_offset: i8,
+    /// The CFA fixed RA offset, if any.
     cfa_fixed_ra_offset: i8,
+    /// Size in bytes of the auxilliary header that follows the sframe_header structure.
     auxhdr_len: u8,
+    /// The number of SFrame FDEs in the section.
     num_fdes: u32,
+    /// The number of SFrame FREs in the section.
     num_fres: u32,
+    /// The length in bytes of the SFrame FRE sub-section.
     fre_len: u32,
+    /// The offset in bytes to the SFrame FDE sub-section.
     fdeoff: u32,
+    /// The offset in bytes to the SFrame FRE sub-section.
     freoff: u32,
 }
 
@@ -136,7 +145,7 @@ impl<'a> SFrameSection<'a> {
         }
 
         // probe magic
-        let magic_offset = core::mem::offset_of!(RawSFrameHeader, magic);
+        let magic_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_magic);
         let mut magic_bytes: [u8; 2] = [0; 2];
         magic_bytes.copy_from_slice(&data[magic_offset..magic_offset + 2]);
         let magic_le = u16::from_le_bytes(magic_bytes);
@@ -153,14 +162,14 @@ impl<'a> SFrameSection<'a> {
         }
 
         // probe version
-        let version_offset = core::mem::offset_of!(RawSFrameHeader, version);
+        let version_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_version);
         let version = data[version_offset];
         if version != 3 {
             return Err(SFrameError::UnsupportedVersion);
         }
 
         // probe flag
-        let flags_offset = core::mem::offset_of!(RawSFrameHeader, flags);
+        let flags_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_flags);
         let flags = data[flags_offset];
         let flags = match SFrameFlags::from_bits(flags) {
             Some(flags) => flags,
@@ -168,7 +177,7 @@ impl<'a> SFrameSection<'a> {
         };
 
         // probe abi
-        let abi_offset = core::mem::offset_of!(RawSFrameHeader, abi_arch);
+        let abi_offset = core::mem::offset_of!(RawSFrameHeader, sfh_abi_arch);
         let abi = data[abi_offset];
         let abi = match abi {
             1 => SFrameABI::AArch64BigEndian,
@@ -179,14 +188,14 @@ impl<'a> SFrameSection<'a> {
         };
 
         let cfa_fixed_fp_offset =
-            data[core::mem::offset_of!(RawSFrameHeader, cfa_fixed_fp_offset)] as i8;
+            data[core::mem::offset_of!(RawSFrameHeader, sfh_cfa_fixed_fp_offset)] as i8;
         let cfa_fixed_ra_offset =
-            data[core::mem::offset_of!(RawSFrameHeader, cfa_fixed_ra_offset)] as i8;
-        let auxhdr_len = data[core::mem::offset_of!(RawSFrameHeader, auxhdr_len)];
+            data[core::mem::offset_of!(RawSFrameHeader, sfh_cfa_fixed_ra_offset)] as i8;
+        let auxhdr_len = data[core::mem::offset_of!(RawSFrameHeader, sfh_auxhdr_len)];
 
         // initial validation
-        let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32);
-        let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32);
+        let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, sfh_num_fdes, u32);
+        let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, sfh_fdeoff, u32);
         if data.len() - core::mem::size_of::<RawSFrameHeader>() < fdeoff as usize {
             return Err(SFrameError::UnexpectedEndOfData);
         } else if (data.len() - core::mem::size_of::<RawSFrameHeader>() - fdeoff as usize)
@@ -206,10 +215,10 @@ impl<'a> SFrameSection<'a> {
             cfa_fixed_ra_offset,
             auxhdr_len,
             num_fdes,
-            num_fres: read_struct!(RawSFrameHeader, data, little_endian, num_fres, u32),
-            fre_len: read_struct!(RawSFrameHeader, data, little_endian, fre_len, u32),
+            num_fres: read_struct!(RawSFrameHeader, data, little_endian, sfh_num_fres, u32),
+            fre_len: read_struct!(RawSFrameHeader, data, little_endian, sfh_fre_len, u32),
             fdeoff,
-            freoff: read_struct!(RawSFrameHeader, data, little_endian, freoff, u32),
+            freoff: read_struct!(RawSFrameHeader, data, little_endian, sfh_freoff, u32),
         })
     }
 
@@ -237,12 +246,11 @@ impl<'a> SFrameSection<'a> {
         }
 
         // read fde attribute in fre sub-section
-
         let func_start_fre_off = read_struct!(
             RawSFrameFDEIndex,
             &self.data[offset..],
             self.little_endian,
-            func_start_fre_off,
+            sfdi_func_start_fre_off,
             u32
         );
 
@@ -256,28 +264,28 @@ impl<'a> SFrameSection<'a> {
             RawSFrameFDEAttr,
             &self.data[fre_offset..],
             self.little_endian,
-            func_num_fres,
+            sfda_func_num_fres,
             u16
         );
         let func_info = read_struct!(
             RawSFrameFDEAttr,
             &self.data[fre_offset..],
             self.little_endian,
-            func_info,
+            sfda_func_info,
             u8
         );
         let func_info2 = read_struct!(
             RawSFrameFDEAttr,
             &self.data[fre_offset..],
             self.little_endian,
-            func_info2,
+            sfda_func_info2,
             u8
         );
         let func_rep_size = read_struct!(
             RawSFrameFDEAttr,
             &self.data[fre_offset..],
             self.little_endian,
-            func_rep_size,
+            sfda_func_rep_size,
             u8
         );
 
@@ -287,14 +295,14 @@ impl<'a> SFrameSection<'a> {
                 RawSFrameFDEIndex,
                 &self.data[offset..],
                 self.little_endian,
-                func_start_offset,
+                sfdi_func_start_offset,
                 i64
             ),
             func_size: read_struct!(
                 RawSFrameFDEIndex,
                 &self.data[offset..],
                 self.little_endian,
-                func_size,
+                sfdi_func_size,
                 u32
             ),
             func_start_fre_off,
@@ -480,7 +488,7 @@ impl<'a> SFrameSection<'a> {
             let base_pc = base_fde.get_pc(self);
             let cmp = base_pc.cmp(&pc);
             match cmp {
-                Ordering::Equal | Ordering::Less if pc < base_pc + base_fde.func_size as u64 => {
+                Ordering::Equal | Ordering::Less if pc - base_pc < base_fde.func_size as u64 => {
                     Ok(Some(base_fde))
                 }
                 _ => Ok(None),
@@ -519,23 +527,31 @@ impl<'a> SFrameSection<'a> {
     }
 }
 
+/// Raw SFrame Preamble
+///
+/// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#SFrame-Preamble>
+#[repr(C, packed)]
+struct RawSFramePreamble {
+    sfp_magic: u16,
+    sfp_version: u8,
+    sfp_flags: u8,
+}
+
 /// Raw SFrame Header
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#SFrame-Header>
 #[repr(C, packed)]
 struct RawSFrameHeader {
-    magic: u16,
-    version: u8,
-    flags: u8,
-    abi_arch: u8,
-    cfa_fixed_fp_offset: i8,
-    cfa_fixed_ra_offset: i8,
-    auxhdr_len: u8,
-    num_fdes: u32,
-    num_fres: u32,
-    fre_len: u32,
-    fdeoff: u32,
-    freoff: u32,
+    sfh_preamble: RawSFramePreamble,
+    sfh_abi_arch: u8,
+    sfh_cfa_fixed_fp_offset: i8,
+    sfh_cfa_fixed_ra_offset: i8,
+    sfh_auxhdr_len: u8,
+    sfh_num_fdes: u32,
+    sfh_num_fres: u32,
+    sfh_fre_len: u32,
+    sfh_fdeoff: u32,
+    sfh_freoff: u32,
 }
 
 /// Raw SFrame FDE Index
@@ -544,9 +560,9 @@ struct RawSFrameHeader {
 #[repr(C, packed)]
 #[allow(dead_code)]
 struct RawSFrameFDEIndex {
-    func_start_offset: i64,
-    func_size: u32,
-    func_start_fre_off: u32,
+    sfdi_func_start_offset: i64,
+    sfdi_func_size: u32,
+    sfdi_func_start_fre_off: u32,
 }
 
 /// Raw SFrame FDE Attribute
@@ -555,10 +571,10 @@ struct RawSFrameFDEIndex {
 #[repr(C, packed)]
 #[allow(dead_code)]
 struct RawSFrameFDEAttr {
-    func_num_fres: u16,
-    func_info: u8,
-    func_info2: u8,
-    func_rep_size: u8,
+    sfda_func_num_fres: u16,
+    sfda_func_info: u8,
+    sfda_func_info2: u8,
+    sfda_func_rep_size: u8,
 }
 
 /// SFrame FDE Info Byte
@@ -571,6 +587,7 @@ pub struct SFrameFDEInfo(u8);
 impl SFrameFDEInfo {
     /// Get SFrame FRE type
     pub fn get_fre_type(&self) -> SFrameResult<SFrameFREType> {
+        // Choice of three SFrame FRE types. See The SFrame FRE Types.
         let fretype = self.0 & 0b1111;
         match fretype {
             0 => Ok(SFrameFREType::Addr1),
@@ -582,8 +599,11 @@ impl SFrameFDEInfo {
 
     /// Get SFrame FDE PC type
     pub fn get_fde_pctype(&self) -> SFrameResult<SFrameFDEPCType> {
-        let fretype = (self.0 >> 4) & 0b1;
-        match fretype {
+        // Specify the SFrame FDE PC Type. Two possible values:
+        // SFRAME_FDE_PCTYPE_MASK (1), or SFRAME_FDE_PCTYPE_INC (0). See The
+        // SFrame FDE PC Types.
+        let fdetype = (self.0 >> 4) & 0b1;
+        match fdetype {
             0 => Ok(SFrameFDEPCType::PCInc),
             1 => Ok(SFrameFDEPCType::PCMask),
             _ => unreachable!(),
@@ -621,6 +641,9 @@ pub struct SFrameFDEInfo2(u8);
 impl SFrameFDEInfo2 {
     /// Get SFrame FDE type
     pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
+        // Specify the SFrame FDE type. Two possible values:
+        // SFRAME_FDE_TYPE_DEFAULT (0), or SFRAME_FDE_TYPE_FLEX (1). See The
+        // SFrame FDE Types.
         let fdetype = self.0 & 0b11111;
         match fdetype {
             0 => Ok(SFrameFDEType::Default),
@@ -655,8 +678,13 @@ pub enum SFrameFREType {
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFDEPCType {
     /// SFRAME_V3_FDE_TYPE_PCINC
+    /// Stacktracers perform a (PC >= FRE_START_ADDR) to look up a matching FRE.
     PCInc,
     /// SFRAME_V3_FDE_TYPE_PCMASK
+    /// Stacktracers perform a (PC % REP_BLOCK_SIZE >= FRE_START_ADDR) to look
+    /// up a matching FRE. REP_BLOCK_SIZE is the size in bytes of the repeating
+    /// block of program instructions and is encoded via sfde_func_rep_size in
+    /// the SFrame FDE.
     PCMask,
 }
 
@@ -800,7 +828,7 @@ impl SFrameFDE {
                 let mut last: Option<SFrameFRE> = None;
                 let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
-                    if fre.start_address.get() as u64 + fde_pc > pc {
+                    if fre.start_address.get() as u64 > pc - fde_pc {
                         // last is the matching one
                         break;
                     }
@@ -808,7 +836,7 @@ impl SFrameFDE {
                 }
                 if let Some(fre) = last {
                     // PC >= FRE_START_ADDR
-                    if fre.start_address.get() as u64 + fde_pc <= pc {
+                    if fre.start_address.get() as u64 <= pc - fde_pc {
                         return Ok(Some(fre));
                     }
                 }
@@ -1088,10 +1116,16 @@ impl SFrameFREInfo {
     pub fn get_dataword_size(&self) -> SFrameResult<usize> {
         match (self.0 >> 5) & 0b11 {
             // SFRAME_FRE_DATAWORD_1B
+            // All data words following the fixed-length FRE structure are 1
+            // byte long.
             0x0 => Ok(1),
             // SFRAME_FRE_DATAWORD_2B
+            // All data words following the fixed-length FRE structure are 2
+            // bytes long.
             0x1 => Ok(2),
             // SFRAME_FRE_DATAWORD_4B
+            // All data words following the fixed-length FRE structure are 4
+            // bytes long.
             0x2 => Ok(4),
             _ => Err(SFrameError::UnsupportedFREDataWordSize),
         }
@@ -1099,6 +1133,11 @@ impl SFrameFREInfo {
 
     /// The number of data word in the FRE
     pub fn get_dataword_count(&self) -> u8 {
+        // Being a 4-bit sized field, a max value of 15 is allowed. Typically, a
+        // value of up to 3 is sufficient for most ABIs to track all three of
+        // CFA, FP and RA. A value of zero indicates that the return address
+        // (RA) is undefined. A stack tracer may use this as indication that an
+        // outermost frame has been reached and the stack trace is complete.
         (self.0 >> 1) & 0b1111
     }
 
