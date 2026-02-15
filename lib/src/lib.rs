@@ -193,6 +193,14 @@ impl<'a> SFrameSection<'a> {
             _ => None,
         }
     }
+
+    /// Iterate FDE entries
+    pub fn iter_fde(&self) -> SFrameFDEIterator<'_> {
+        SFrameFDEIterator {
+            section: self,
+            index: 0,
+        }
+    }
 }
 
 /// SFrame FDE
@@ -244,6 +252,25 @@ impl SFrameFDE {
             }
             _ => Err(SFrameError::UnsupportedVersion),
         }
+    }
+}
+
+/// Iterator for SFrame FDE
+pub struct SFrameFDEIterator<'a> {
+    section: &'a SFrameSection<'a>,
+    index: u32,
+}
+
+impl<'a> FallibleIterator for SFrameFDEIterator<'a> {
+    type Item = SFrameFDE;
+    type Error = SFrameError;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        let res = self.section.get_fde(self.index);
+        if let Ok(Some(_)) = res {
+            self.index += 1;
+        }
+        res
     }
 }
 
