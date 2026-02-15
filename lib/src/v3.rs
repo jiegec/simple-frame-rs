@@ -565,9 +565,9 @@ struct RawSFrameFDEIndex {
     func_start_fre_off: u32,
 }
 
-/// Raw SFrame FDE Index
+/// Raw SFrame FDE Attribute
 ///
-/// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#The-SFrame-FDE-Index>
+/// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#The-SFrame-FDE-Attribute>
 #[repr(C, packed)]
 #[allow(dead_code)]
 struct RawSFrameFDEAttr {
@@ -577,7 +577,7 @@ struct RawSFrameFDEAttr {
     func_rep_size: u8,
 }
 
-/// SFrame FDE Info Word
+/// SFrame FDE Info Byte
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#The-SFrame-FDE-Info-Bytes>
 #[derive(Debug, Clone, Copy)]
@@ -627,7 +627,7 @@ impl SFrameFDEInfo {
     }
 }
 
-/// SFrame FDE Info Word2
+/// SFrame FDE Info Byte 2
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#The-SFrame-FDE-Info-Bytes>
 #[derive(Debug, Clone, Copy)]
@@ -1086,7 +1086,7 @@ pub struct SFrameFlexRecoveryRules {
     pub fp: Option<SFrameFlexRecoveryRule>,
 }
 
-/// SFrame FRE Info Word
+/// SFrame FRE Info Byte
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html#The-SFrame-FRE-Info-Word>
 #[derive(Debug, Clone, Copy)]
