@@ -49,6 +49,54 @@ pub enum SFrameABI {
     S390XBigEndian,
 }
 
+/// SFrame Flags
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Flags>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameFlags {
+    /// SFrame version 1 flags
+    V1(v1::SFrameFlags),
+    /// SFrame version 2 flags
+    V2(v2::SFrameFlags),
+    /// SFrame version 3 flags
+    V3(v3::SFrameFlags),
+}
+
+impl SFrameFlags {
+    /// Function Descriptor Entries are sorted on PC.
+    pub fn is_fde_sorted(&self) -> bool {
+        match self {
+            SFrameFlags::V1(flags) => flags.contains(v1::SFrameFlags::SFRAME_F_FDE_SORTED),
+            SFrameFlags::V2(flags) => flags.contains(v2::SFrameFlags::SFRAME_F_FDE_SORTED),
+            SFrameFlags::V3(flags) => flags.contains(v3::SFrameFlags::SFRAME_F_FDE_SORTED),
+        }
+    }
+
+    /// All functions in the object file preserve frame pointer.
+    pub fn preserve_frame_pointer(&self) -> bool {
+        match self {
+            SFrameFlags::V1(flags) => flags.contains(v1::SFrameFlags::SFRAME_F_FRAME_POINTER),
+            SFrameFlags::V2(flags) => flags.contains(v2::SFrameFlags::SFRAME_F_FRAME_POINTER),
+            SFrameFlags::V3(flags) => flags.contains(v3::SFrameFlags::SFRAME_F_FRAME_POINTER),
+        }
+    }
+
+    /// The sfde_func_start_address(V2)/sfdi_func_start_offset(V3) field in the SFrame FDE is an offset in bytes to the function's start address, from the field itself.
+    ///
+    /// Returns `SFrameError::UnsupportedVersion` for version 1.
+    pub fn is_fde_func_start_pcrel(&self) -> SFrameResult<bool> {
+        match self {
+            SFrameFlags::V1(_) => Err(SFrameError::UnsupportedVersion),
+            SFrameFlags::V2(flags) => {
+                Ok(flags.contains(v2::SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL))
+            }
+            SFrameFlags::V3(flags) => {
+                Ok(flags.contains(v3::SFrameFlags::SFRAME_F_FDE_FUNC_START_PCREL))
+            }
+        }
+    }
+}
+
 /// SFrame section
 ///
 /// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-Section>
@@ -98,6 +146,33 @@ impl<'a> SFrameSection<'a> {
             SFrameSection::V1(sframe_section) => sframe_section.get_abi(),
             SFrameSection::V2(sframe_section) => sframe_section.get_abi(),
             SFrameSection::V3(sframe_section) => sframe_section.get_abi(),
+        }
+    }
+
+    /// Get SFrame flags
+    pub fn get_flags(&self) -> SFrameResult<SFrameFlags> {
+        match self {
+            SFrameSection::V1(sframe_section) => Ok(SFrameFlags::V1(sframe_section.get_flags())),
+            SFrameSection::V2(sframe_section) => Ok(SFrameFlags::V2(sframe_section.get_flags())),
+            SFrameSection::V3(sframe_section) => Ok(SFrameFlags::V3(sframe_section.get_flags())),
+        }
+    }
+
+    /// Get SFrame CFA fixed FP offset
+    pub fn get_cfa_fixed_fp_offset(&self) -> i8 {
+        match self {
+            SFrameSection::V1(sframe_section) => sframe_section.get_cfa_fixed_fp_offset(),
+            SFrameSection::V2(sframe_section) => sframe_section.get_cfa_fixed_fp_offset(),
+            SFrameSection::V3(sframe_section) => sframe_section.get_cfa_fixed_fp_offset(),
+        }
+    }
+
+    /// Get SFrame CFA fixed RA offset
+    pub fn get_cfa_fixed_ra_offset(&self) -> i8 {
+        match self {
+            SFrameSection::V1(sframe_section) => sframe_section.get_cfa_fixed_ra_offset(),
+            SFrameSection::V2(sframe_section) => sframe_section.get_cfa_fixed_ra_offset(),
+            SFrameSection::V3(sframe_section) => sframe_section.get_cfa_fixed_ra_offset(),
         }
     }
 
@@ -215,6 +290,32 @@ pub enum SFrameFDE {
 }
 
 impl SFrameFDE {
+    /// Compute PC of the function
+    pub fn get_pc(&self, section: &SFrameSection<'_>) -> SFrameResult<u64> {
+        match (self, section) {
+            (SFrameFDE::V1(sframe_fde), SFrameSection::V1(sframe_section)) => {
+                Ok(sframe_fde.get_pc(sframe_section))
+            }
+            (SFrameFDE::V2(sframe_fde), SFrameSection::V2(sframe_section)) => {
+                Ok(sframe_fde.get_pc(sframe_section))
+            }
+            (SFrameFDE::V3(sframe_fde), SFrameSection::V3(sframe_section)) => {
+                Ok(sframe_fde.get_pc(sframe_section))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+
+    /// Check if this is a signal frame
+    ///
+    /// Returns `SFrameError::UnsupportedVersion` for version 1 and 2.
+    pub fn is_signal_frame(&self) -> SFrameResult<bool> {
+        match self {
+            SFrameFDE::V1(_) | SFrameFDE::V2(_) => Err(SFrameError::UnsupportedVersion),
+            SFrameFDE::V3(sframe_fde) => sframe_fde.func_info.is_signal_frame(),
+        }
+    }
+
     /// Find FRE entry by pc
     pub fn find_fre(
         &self,
