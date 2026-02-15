@@ -225,10 +225,16 @@ impl<'a> SFrameSection<'a> {
         for i in 0..self.num_fdes {
             let fde = self.get_fde(i)?.unwrap();
             let pc = fde.get_pc(self);
+            let mut suffix = String::new();
+
+            // aarch64 pauth
+            if let SFrameAArch64PAuthKey::KeyB = fde.func_info.get_aarch64_pauth_key()? {
+                suffix += ", pauth = B key";
+            }
             writeln!(
                 &mut s,
-                "  func idx [{i}]: pc = 0x{:x}, size = {} bytes",
-                pc, fde.func_size,
+                "  func idx [{i}]: pc = 0x{:x}, size = {} bytes{}",
+                pc, fde.func_size, suffix
             )?;
 
             match fde.func_info.get_fde_type()? {
@@ -255,10 +261,14 @@ impl<'a> SFrameSection<'a> {
                     Some(offset) if self.cfa_fixed_fp_offset == 0 => format!("c{:+}", offset),
                     _ => "u".to_string(), // without offset
                 };
-                let ra = match fre.get_ra_offset(self) {
+                let mut ra = match fre.get_ra_offset(self) {
                     Some(offset) if self.cfa_fixed_ra_offset == 0 => format!("c{:+}", offset),
                     _ => "u".to_string(), // without offset
                 };
+                if fre.info.get_mangled_ra_p() {
+                    // ra is mangled with signature
+                    ra.push_str("[s]");
+                }
                 let rest = format!("{cfa:8} {fp:6} {ra}");
                 writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
             }

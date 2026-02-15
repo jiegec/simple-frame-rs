@@ -356,6 +356,7 @@ impl<'a> SFrameSection<'a> {
         for i in 0..self.num_fdes {
             let fde = self.get_fde(i)?.unwrap();
             let pc = fde.get_pc(self);
+            let mut suffix = String::new();
 
             let mut attrs = "".to_string();
             if fde.func_info.is_signal_frame()? {
@@ -365,11 +366,15 @@ impl<'a> SFrameSection<'a> {
                 attrs.push('F');
             }
 
-            let suffix = if attrs.is_empty() {
-                format!("")
-            } else {
-                format!(", attr = \"{}\"", attrs)
+            if !attrs.is_empty() {
+                suffix += &format!(", attr = \"{}\"", attrs);
             };
+
+            // aarch64 pauth
+            if let SFrameAArch64PAuthKey::KeyB = fde.func_info.get_aarch64_pauth_key()? {
+                suffix += ", pauth = B key";
+            }
+
             writeln!(
                 &mut s,
                 "  func idx [{i}]: pc = 0x{:x}, size = {} bytes{}",
@@ -408,7 +413,7 @@ impl<'a> SFrameSection<'a> {
                                 Some(offset) => format!("c{:+}", offset),
                                 None => "u".to_string(), // without offset
                             };
-                            let ra = if self.cfa_fixed_ra_offset != 0 {
+                            let mut ra = if self.cfa_fixed_ra_offset != 0 {
                                 "f".to_string() // fixed
                             } else {
                                 match fre.get_ra_offset(self) {
@@ -416,6 +421,10 @@ impl<'a> SFrameSection<'a> {
                                     None => "u".to_string(), // without offset
                                 }
                             };
+                            if fre.info.get_mangled_ra_p() {
+                                // ra is mangled with signature
+                                ra.push_str("[s]");
+                            }
                             let rest = format!("{cfa:8} {fp:6} {ra}");
                             writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
                         }
