@@ -53,9 +53,10 @@ def find_assembly_files(arch: str, binutils_path: str) -> List[str]:
     files.extend(arch_files)
 
     # Find common files
-    common_pattern = str(testdir / "cfi-sframe-common-*.s")
-    common_files = glob.glob(common_pattern)
-    files.extend(common_files)
+    if arch == "x86_64":
+        common_pattern = str(testdir / "cfi-sframe-common-*.s")
+        common_files = glob.glob(common_pattern)
+        files.extend(common_files)
 
     # Sort for consistent ordering
     files.sort()
