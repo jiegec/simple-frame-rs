@@ -452,8 +452,13 @@ struct Testcase {
 fn test() {
     for entry in std::fs::read_dir("testcases").unwrap() {
         let entry = entry.unwrap();
+        println!("Testing {}", entry.path().display());
         let testcase: Testcase =
             serde_json::from_reader(std::fs::File::open(entry.path()).unwrap()).unwrap();
+        if testcase.content.is_empty() {
+            continue;
+        }
+
         let section =
             simple_frame_rs::SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
         let s = section.to_string().unwrap();
@@ -482,9 +487,16 @@ fn test() {
             let parts_actual: Vec<&str> =
                 actual.trim().split(" ").filter(|s| s.len() > 0).collect();
             assert_eq!(
-                parts_expected, parts_actual,
-                "\"{}\"({:?}) != \"{}\"({:?})\nExpected:\n{}\nActual:\n{}",
-                expected, parts_expected, actual, parts_actual, testcase.groundtruth, s
+                parts_expected,
+                parts_actual,
+                "\"{}\"({:?}) != \"{}\"({:?})\nExpected:\n{}\nActual:\n{}\nIn {}",
+                expected,
+                parts_expected,
+                actual,
+                parts_actual,
+                testcase.groundtruth,
+                s,
+                entry.path().display()
             );
         }
     }

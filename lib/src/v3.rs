@@ -99,6 +99,51 @@ pub struct SFrameSection<'a> {
 /// The magic number for SFrame section: 0xdee2
 const SFRAME_MAGIC: u16 = 0xdee2;
 
+/// Get register name from dwarf register number
+fn get_regname_from_dwarf(regnum: i32, abi: SFrameABI) -> String {
+    match (regnum, abi) {
+        // rbp
+        (6, SFrameABI::AMD64LittleEndian) => "fp".to_string(),
+        // rsp
+        (7, SFrameABI::AMD64LittleEndian) => "sp".to_string(),
+        _ => format!("r{}", regnum),
+    }
+}
+
+/// Print flex recovery rule to string
+fn flex_recovery_rule_to_string(rule: &SFrameFlexRecoveryRule, abi: SFrameABI) -> String {
+    match (
+        rule.control.is_padding(),
+        rule.control.reg_p(),
+        rule.control.deref_p(),
+    ) {
+        (true, _, _) => {
+            // undefined
+            format!("U")
+        }
+        (false, true, true) => {
+            // register deref
+            format!(
+                "({}{:+})",
+                get_regname_from_dwarf(rule.control.regnum(), abi),
+                rule.offset
+            )
+        }
+        (false, true, false) => {
+            // register
+            format!(
+                "{}{:+}",
+                get_regname_from_dwarf(rule.control.regnum(), abi),
+                rule.offset
+            )
+        }
+        (false, false, _) => {
+            // cfa
+            format!("c{:+}", rule.offset)
+        }
+    }
+}
+
 impl<'a> SFrameSection<'a> {
     /// Parse SFrame section from data
     pub fn from(data: &'a [u8], section_base: u64) -> SFrameResult<SFrameSection<'a>> {
@@ -311,10 +356,24 @@ impl<'a> SFrameSection<'a> {
         for i in 0..self.num_fdes {
             let fde = self.get_fde(i)?.unwrap();
             let pc = fde.get_pc(self);
+
+            let mut attrs = "".to_string();
+            if fde.func_info.is_signal_frame()? {
+                attrs.push('S');
+            }
+            if let Ok(SFrameFDEType::Flex) = fde.func_info2.get_fde_type() {
+                attrs.push('F');
+            }
+
+            let suffix = if attrs.is_empty() {
+                format!("")
+            } else {
+                format!(", attr = \"{}\"", attrs)
+            };
             writeln!(
                 &mut s,
-                "  func idx [{i}]: pc = 0x{:x}, size = {} bytes",
-                pc, fde.func_size,
+                "  func idx [{i}]: pc = 0x{:x}, size = {} bytes{}",
+                pc, fde.func_size, suffix
             )?;
 
             match fde.func_info.get_fde_pctype()? {
@@ -331,26 +390,63 @@ impl<'a> SFrameSection<'a> {
                     SFrameFDEPCType::PCInc => pc + fre.start_address.get() as u64,
                     SFrameFDEPCType::PCMask => fre.start_address.get() as u64,
                 };
-                let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
-                    "fp"
-                } else {
-                    "sp"
-                };
-                let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
-                let fp = match fre.get_fp_offset(self) {
-                    Some(offset) => format!("c{:+}", offset),
-                    None => "u".to_string(), // without offset
-                };
-                let ra = if self.cfa_fixed_ra_offset != 0 {
-                    "f".to_string() // fixed
-                } else {
-                    match fre.get_ra_offset(self) {
-                        Some(offset) => format!("c{:+}", offset),
-                        None => "u".to_string(), // without offset
+
+                match fde.func_info2.get_fde_type() {
+                    Ok(SFrameFDEType::Default) => {
+                        // default fde
+                        if fre.stack_offsets.is_empty() {
+                            // RA undefined: top level function
+                            writeln!(&mut s, "  {:016x}  RA undefined", start_pc)?;
+                        } else {
+                            let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
+                                "fp"
+                            } else {
+                                "sp"
+                            };
+                            let cfa = format!("{}+{}", base_reg, fre.stack_offsets[0].get());
+                            let fp = match fre.get_fp_offset(self) {
+                                Some(offset) => format!("c{:+}", offset),
+                                None => "u".to_string(), // without offset
+                            };
+                            let ra = if self.cfa_fixed_ra_offset != 0 {
+                                "f".to_string() // fixed
+                            } else {
+                                match fre.get_ra_offset(self) {
+                                    Some(offset) => format!("c{:+}", offset),
+                                    None => "u".to_string(), // without offset
+                                }
+                            };
+                            let rest = format!("{cfa:8} {fp:6} {ra}");
+                            writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
+                        }
                     }
-                };
-                let rest = format!("{cfa:8} {fp:6} {ra}");
-                writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
+                    Ok(SFrameFDEType::Flex) => {
+                        // flex fde
+                        if let Some(rules) = fre.get_flex_recovery_rules() {
+                            let cfa = flex_recovery_rule_to_string(&rules.cfa, self.abi);
+                            let fp = if let Some(fp_rule) = rules.fp {
+                                flex_recovery_rule_to_string(&fp_rule, self.abi)
+                            } else {
+                                "u".to_string()
+                            };
+                            let ra = if let Some(ra_rule) = rules.ra {
+                                flex_recovery_rule_to_string(&ra_rule, self.abi)
+                            } else {
+                                if self.cfa_fixed_ra_offset != 0 {
+                                    "f".to_string()
+                                } else {
+                                    "u".to_string()
+                                }
+                            };
+                            let rest = format!("{cfa:8} {fp:6} {ra}");
+                            writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
+                        } else {
+                            // RA undefined: top level function
+                            writeln!(&mut s, "  {:016x}  RA undefined", start_pc)?;
+                        }
+                    }
+                    _ => {}
+                }
             }
             writeln!(&mut s,)?;
         }
@@ -515,8 +611,8 @@ impl SFrameFDEInfo {
     pub fn is_signal_frame(&self) -> SFrameResult<bool> {
         let fretype = (self.0 >> 7) & 0b1;
         match fretype {
-            0 => Ok(true),
-            1 => Ok(false),
+            0 => Ok(false),
+            1 => Ok(true),
             _ => unreachable!(),
         }
     }
@@ -917,7 +1013,7 @@ impl SFrameFRE {
     /// For flexible FDE types, returns the recovery rules for CFA, RA, and FP.
     /// Each rule consists of a Control Data word and an Offset Data word.
     ///
-    /// Returns None if the FDE is not a Flex FDE type or if the data is invalid.
+    /// Returns None if the data is invalid.
     pub fn get_flex_recovery_rules(&self) -> Option<SFrameFlexRecoveryRules> {
         let data_words: Vec<i32> = self.stack_offsets.iter().map(|o| o.get()).collect();
 
@@ -930,34 +1026,38 @@ impl SFrameFRE {
         };
 
         // Parse RA recovery rule (if present)
+        let mut offset = 2;
         let mut ra = None;
-        if data_words.len() >= 4 {
+        if data_words.len() >= 3 {
             let ra_control = SFrameFlexControlData::new(*data_words.get(2)?);
-            if !ra_control.is_padding() {
+            if ra_control.is_padding() {
+                ra = Some(SFrameFlexRecoveryRule {
+                    control: ra_control,
+                    offset: 0,
+                });
+                offset += 1;
+            } else {
                 ra = Some(SFrameFlexRecoveryRule {
                     control: ra_control,
                     offset: *data_words.get(3)?,
                 });
+                offset += 2;
             }
         }
 
         // Parse FP recovery rule (if present)
         let mut fp = None;
-        if ra.is_some() && data_words.len() >= 6 {
-            let fp_control = SFrameFlexControlData::new(*data_words.get(4)?);
-            if !fp_control.is_padding() {
+        if data_words.len() >= offset + 1 {
+            let fp_control = SFrameFlexControlData::new(*data_words.get(offset)?);
+            if fp_control.is_padding() {
                 fp = Some(SFrameFlexRecoveryRule {
                     control: fp_control,
-                    offset: *data_words.get(5)?,
+                    offset: 0,
                 });
-            }
-        } else if ra.is_none() && data_words.len() >= 5 {
-            // RA was padding, check if FP follows directly
-            let fp_control = SFrameFlexControlData::new(*data_words.get(3)?);
-            if !fp_control.is_padding() {
+            } else {
                 fp = Some(SFrameFlexRecoveryRule {
                     control: fp_control,
-                    offset: *data_words.get(4)?,
+                    offset: *data_words.get(offset + 1)?,
                 });
             }
         }
