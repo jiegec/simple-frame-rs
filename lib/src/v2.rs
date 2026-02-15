@@ -377,7 +377,7 @@ impl<'a> SFrameSection<'a> {
             let base_pc = base_fde.get_pc(self);
             let cmp = base_pc.cmp(&pc);
             match cmp {
-                Ordering::Equal | Ordering::Less if pc < base_pc + base_fde.func_size as u64 => {
+                Ordering::Equal | Ordering::Less if pc - base_pc < base_fde.func_size as u64 => {
                     Ok(Some(base_fde))
                 }
                 _ => Ok(None),
