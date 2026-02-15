@@ -8,5 +8,13 @@ PATH=~/prefix/binutils-2_45/bin:$PATH CUSTOM_BINUTILS_PATH=~/prefix/binutils-2_4
 PATH=~/prefix/binutils-2_45/bin:$PATH CUSTOM_BINUTILS_PATH=~/prefix/binutils-2_43/bin ./create_testcase.sh
 PATH=~/prefix/binutils-2_45/bin:$PATH CUSTOM_BINUTILS_PATH=~/prefix/binutils-2_44/bin ./create_testcase.sh
 PATH=~/prefix/binutils-2_45/bin:$PATH CUSTOM_BINUTILS_PATH=~/prefix/binutils-2_45/bin ./create_testcase.sh
+pushd ~/binutils-gdb
+git checkout binutils-2_45
+popd
+PATH=~/prefix/binutils-2_45/bin:$PATH python3 create_testcase.py
 # SFrame V3: 2.46
 PATH=~/prefix/binutils-2_46/bin:$PATH CUSTOM_BINUTILS_PATH=~/prefix/binutils-2_46/bin ./create_testcase.sh
+pushd ~/binutils-gdb
+git checkout binutils-2_46
+popd
+PATH=~/prefix/binutils-2_46/bin:$PATH python3 create_testcase.py
