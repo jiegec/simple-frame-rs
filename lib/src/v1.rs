@@ -30,14 +30,28 @@ pub struct SFrameSection<'a> {
     section_base: u64,
     little_endian: bool,
     flags: SFrameFlags,
+    /// The ABI/arch identifier. See SFrame ABI/arch identifier.
     abi: SFrameABI,
+    /// The CFA fixed FP offset, if any.
     cfa_fixed_fp_offset: i8,
+    /// The CFA fixed RA offset, if any.
     cfa_fixed_ra_offset: i8,
+    /// Size in bytes of the auxilliary header that follows the sframe_header structure.
     auxhdr_len: u8,
+    /// The number of SFrame FDEs in the section.
     num_fdes: u32,
+    /// The number of SFrame FREs in the section.
     num_fres: u32,
+    /// The length in bytes of the SFrame FRE sub-section.
     fre_len: u32,
+    /// The offset in bytes of the SFrame FDE sub-section. This sub-section
+    /// contains sfh_num_fdes number of fixed-length array elements. The array
+    /// element is of type SFrame function desciptor entry, each providing a
+    /// high-level function description for backtracing. See SFrame FDE.
     fdeoff: u32,
+    /// The offset in bytes of the SFrame FRE sub-section, the core of the
+    /// SFrame section, which describes the unwind information using
+    /// variable-length array elements. See SFrame FRE.
     freoff: u32,
 }
 
@@ -53,7 +67,7 @@ impl<'a> SFrameSection<'a> {
         }
 
         // probe magic
-        let magic_offset = core::mem::offset_of!(RawSFrameHeader, magic);
+        let magic_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_magic);
         let mut magic_bytes: [u8; 2] = [0; 2];
         magic_bytes.copy_from_slice(&data[magic_offset..magic_offset + 2]);
         let magic_le = u16::from_le_bytes(magic_bytes);
@@ -70,14 +84,14 @@ impl<'a> SFrameSection<'a> {
         }
 
         // probe version
-        let version_offset = core::mem::offset_of!(RawSFrameHeader, version);
+        let version_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_version);
         let version = data[version_offset];
         if version != 1 {
             return Err(SFrameError::UnsupportedVersion);
         }
 
         // probe flag
-        let flags_offset = core::mem::offset_of!(RawSFrameHeader, flags);
+        let flags_offset = core::mem::offset_of!(RawSFrameHeader, sfh_preamble.sfp_flags);
         let flags = data[flags_offset];
         let flags = match SFrameFlags::from_bits(flags) {
             Some(flags) => flags,
@@ -85,7 +99,7 @@ impl<'a> SFrameSection<'a> {
         };
 
         // probe abi
-        let abi_offset = core::mem::offset_of!(RawSFrameHeader, abi_arch);
+        let abi_offset = core::mem::offset_of!(RawSFrameHeader, sfh_abi_arch);
         let abi = data[abi_offset];
         let abi = match abi {
             1 => SFrameABI::AArch64BigEndian,
@@ -95,14 +109,14 @@ impl<'a> SFrameSection<'a> {
         };
 
         let cfa_fixed_fp_offset =
-            data[core::mem::offset_of!(RawSFrameHeader, cfa_fixed_fp_offset)] as i8;
+            data[core::mem::offset_of!(RawSFrameHeader, sfh_cfa_fixed_fp_offset)] as i8;
         let cfa_fixed_ra_offset =
-            data[core::mem::offset_of!(RawSFrameHeader, cfa_fixed_ra_offset)] as i8;
-        let auxhdr_len = data[core::mem::offset_of!(RawSFrameHeader, auxhdr_len)];
+            data[core::mem::offset_of!(RawSFrameHeader, sfh_cfa_fixed_ra_offset)] as i8;
+        let auxhdr_len = data[core::mem::offset_of!(RawSFrameHeader, sfh_auxhdr_len)];
 
         // initial validation
-        let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, num_fdes, u32);
-        let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, fdeoff, u32);
+        let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, sfh_num_fdes, u32);
+        let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, sfh_fdeoff, u32);
         if data.len() - core::mem::size_of::<RawSFrameHeader>() < fdeoff as usize {
             return Err(SFrameError::UnexpectedEndOfData);
         } else if (data.len() - core::mem::size_of::<RawSFrameHeader>() - fdeoff as usize)
@@ -122,10 +136,10 @@ impl<'a> SFrameSection<'a> {
             cfa_fixed_ra_offset,
             auxhdr_len,
             num_fdes,
-            num_fres: read_struct!(RawSFrameHeader, data, little_endian, num_fres, u32),
-            fre_len: read_struct!(RawSFrameHeader, data, little_endian, fre_len, u32),
+            num_fres: read_struct!(RawSFrameHeader, data, little_endian, sfh_num_fres, u32),
+            fre_len: read_struct!(RawSFrameHeader, data, little_endian, sfh_fre_len, u32),
             fdeoff,
-            freoff: read_struct!(RawSFrameHeader, data, little_endian, freoff, u32),
+            freoff: read_struct!(RawSFrameHeader, data, little_endian, sfh_freoff, u32),
         })
     }
 
@@ -157,32 +171,32 @@ impl<'a> SFrameSection<'a> {
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_start_address,
+                sfde_func_start_address,
                 i32
             ),
             func_size: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_size,
+                sfde_func_size,
                 u32
             ),
             func_start_fre_off: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_start_fre_off,
+                sfde_func_start_fre_off,
                 u32
             ),
             func_num_fres: read_struct!(
                 RawSFrameFDE,
                 &self.data[offset..],
                 self.little_endian,
-                func_num_fres,
+                sfde_func_num_fres,
                 u32
             ),
             func_info: SFrameFDEInfo(
-                self.data[offset + core::mem::offset_of!(RawSFrameFDE, func_info)],
+                self.data[offset + core::mem::offset_of!(RawSFrameFDE, sfde_func_info)],
             ),
         }))
     }
@@ -339,23 +353,31 @@ impl<'a> SFrameSection<'a> {
     }
 }
 
+/// Raw SFrame Preamble
+///
+/// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#SFrame-Preamble>
+#[repr(C, packed)]
+struct RawSFramePreamble {
+    sfp_magic: u16,
+    sfp_version: u8,
+    sfp_flags: u8,
+}
+
 /// Raw SFrame Header
 ///
 /// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#SFrame-Header>
 #[repr(C, packed)]
 struct RawSFrameHeader {
-    magic: u16,
-    version: u8,
-    flags: u8,
-    abi_arch: u8,
-    cfa_fixed_fp_offset: i8,
-    cfa_fixed_ra_offset: i8,
-    auxhdr_len: u8,
-    num_fdes: u32,
-    num_fres: u32,
-    fre_len: u32,
-    fdeoff: u32,
-    freoff: u32,
+    sfh_preamble: RawSFramePreamble,
+    sfh_abi_arch: u8,
+    sfh_cfa_fixed_fp_offset: i8,
+    sfh_cfa_fixed_ra_offset: i8,
+    sfh_auxhdr_len: u8,
+    sfh_num_fdes: u32,
+    sfh_num_fres: u32,
+    sfh_fre_len: u32,
+    sfh_fdeoff: u32,
+    sfh_freoff: u32,
 }
 
 /// Raw SFrame FDE
@@ -364,11 +386,11 @@ struct RawSFrameHeader {
 #[repr(C, packed)]
 #[allow(dead_code)]
 struct RawSFrameFDE {
-    func_start_address: i32,
-    func_size: u32,
-    func_start_fre_off: u32,
-    func_num_fres: u32,
-    func_info: u8,
+    sfde_func_start_address: i32,
+    sfde_func_size: u32,
+    sfde_func_start_fre_off: u32,
+    sfde_func_num_fres: u32,
+    sfde_func_info: u8,
 }
 
 /// SFrame FDE Info Word
@@ -383,6 +405,7 @@ pub struct SFrameFDEInfo(u8);
 impl SFrameFDEInfo {
     /// Get SFrame FRE type
     pub fn get_fre_type(&self) -> SFrameResult<SFrameFREType> {
+        // Choice of three SFrame FRE types. See The SFrame FRE types.
         let fretype = self.0 & 0b1111;
         match fretype {
             0 => Ok(SFrameFREType::Addr1),
@@ -394,8 +417,10 @@ impl SFrameFDEInfo {
 
     /// Get SFrame FDE type
     pub fn get_fde_type(&self) -> SFrameResult<SFrameFDEType> {
-        let fretype = (self.0 >> 4) & 0b1;
-        match fretype {
+        // SFRAME_FDE_TYPE_PCMASK (1) or SFRAME_FDE_TYPE_PCINC (0). See The
+        // SFrame FDE types.
+        let fdetype = (self.0 >> 4) & 0b1;
+        match fdetype {
             0 => Ok(SFrameFDEType::PCInc),
             1 => Ok(SFrameFDEType::PCMask),
             _ => unreachable!(),
@@ -438,8 +463,11 @@ pub enum SFrameFREType {
 #[derive(Debug, Clone, Copy)]
 pub enum SFrameFDEType {
     /// SFRAME_FDE_TYPE_PCINC
+    /// Unwinders perform a (PC >= FRE_START_ADDR) to look up a matching FRE.
     PCInc,
     /// SFRAME_FDE_TYPE_PCMASK
+    /// Unwinders perform a (PC & FRE_START_ADDR_AS_MASK >=
+    /// FRE_START_ADDR_AS_MASK) to look up a matching FRE.
     PCMask,
 }
 
@@ -459,13 +487,17 @@ pub enum SFrameAArch64PAuthKey {
 /// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#SFrame-Function-Descriptor-Entries>
 #[derive(Debug, Clone, Copy)]
 pub struct SFrameFDE {
-    /// Signed 32-bit integral field denoting the virtual memory address of the described function.
+    /// Signed 32-bit integral field denoting the virtual memory address of the
+    /// described function.
     pub func_start_address: i32,
-    /// Unsigned 32-bit integral field specifying the size of the function in bytes.
+    /// Unsigned 32-bit integral field specifying the size of the function in
+    /// bytes.
     pub func_size: u32,
-    /// Unsigned 32-bit integral field specifying the offset in bytes of the function’s first SFrame FRE in the SFrame section.
+    /// Unsigned 32-bit integral field specifying the offset in bytes of the
+    /// function’s first SFrame FRE in the SFrame section.
     pub func_start_fre_off: u32,
-    /// Unsigned 32-bit integral field specifying the total number of SFrame FREs used for the function.
+    /// Unsigned 32-bit integral field specifying the total number of SFrame
+    /// FREs used for the function.
     pub func_num_fres: u32,
     /// The SFrame FDE info word. See The SFrame FDE info word.
     pub func_info: SFrameFDEInfo,
@@ -651,12 +683,20 @@ impl SFrameFREInfo {
 
     /// Size of stack offsets in bytes.
     pub fn get_offset_size(&self) -> SFrameResult<usize> {
+        // Size of stack offsets in bytes. Valid values are
+        // SFRAME_FRE_OFFSET_1B, SFRAME_FRE_OFFSET_2B, and SFRAME_FRE_OFFSET_4B.
         match (self.0 >> 5) & 0b11 {
             // SFRAME_FRE_OFFSET_1B
+            // All stack offsets following the fixed-length FRE structure are 1
+            // byte long.
             0x0 => Ok(1),
             // SFRAME_FRE_OFFSET_2B
+            // All stack offsets following the fixed-length FRE structure are 2
+            // bytes long.
             0x1 => Ok(2),
             // SFRAME_FRE_OFFSET_4B
+            // All stack offsets following the fixed-length FRE structure are 4
+            // bytes long.
             0x2 => Ok(4),
             _ => Err(SFrameError::UnsupportedFREStackOffsetSize),
         }
@@ -664,6 +704,7 @@ impl SFrameFREInfo {
 
     /// The number of stack offsets in the FRE
     pub fn get_offset_count(&self) -> u8 {
+        // A value of upto 3 is allowed to track all three of CFA, FP and RA.
         (self.0 >> 1) & 0b1111
     }
 
