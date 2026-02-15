@@ -2,8 +2,8 @@
 //!
 //! Usage: Use [SFrameSection::from] to load sframe section content and access
 //! its content.
-//! 
-//! A version-agnostic API is provided at the crate level. You can use API from 
+//!
+//! A version-agnostic API is provided at the crate level. You can use API from
 //! v1/v2/v3 modules to parse sframe section of specific versions.
 //!
 //! Spec: <https://sourceware.org/binutils/docs/sframe-spec.html>
@@ -21,7 +21,11 @@ macro_rules! read_binary {
     ($data: expr, $le: expr, $ty: ident, $offset: expr) => {{
         let data_offset = $offset;
         let mut data_bytes: [u8; core::mem::size_of::<$ty>()] = [0; core::mem::size_of::<$ty>()];
-        data_bytes.copy_from_slice(&$data[data_offset..data_offset + core::mem::size_of::<$ty>()]);
+        data_bytes.copy_from_slice(
+            &$data
+                .get(data_offset..data_offset + core::mem::size_of::<$ty>())
+                .ok_or(SFrameError::UnexpectedEndOfData)?,
+        );
         if $le {
             $ty::from_le_bytes(data_bytes)
         } else {
