@@ -119,7 +119,7 @@ fn flex_recovery_rule_to_string(rule: &SFrameFlexRecoveryRule, abi: SFrameABI) -
     ) {
         (true, _, _) => {
             // undefined
-            format!("U")
+            "U".to_string()
         }
         (false, true, true) => {
             // register deref
@@ -443,12 +443,10 @@ impl<'a> SFrameSection<'a> {
                             };
                             let ra = if let Some(ra_rule) = rules.ra {
                                 flex_recovery_rule_to_string(&ra_rule, self.abi)
+                            } else if self.cfa_fixed_ra_offset != 0 {
+                                "f".to_string()
                             } else {
-                                if self.cfa_fixed_ra_offset != 0 {
-                                    "f".to_string()
-                                } else {
-                                    "u".to_string()
-                                }
+                                "u".to_string()
                             };
                             let rest = format!("{cfa:8} {fp:6} {ra}");
                             writeln!(&mut s, "  {:016x}  {}", start_pc, rest)?;
@@ -1030,7 +1028,7 @@ impl SFrameFRE {
         let data_words: Vec<i32> = self.stack_offsets.iter().map(|o| o.get()).collect();
 
         // Parse CFA recovery rule (always present)
-        let cfa_control = SFrameFlexControlData::new(*data_words.get(0)?);
+        let cfa_control = SFrameFlexControlData::new(*data_words.first()?);
         let cfa_offset = *data_words.get(1)?;
         let cfa = SFrameFlexRecoveryRule {
             control: cfa_control,
@@ -1059,7 +1057,7 @@ impl SFrameFRE {
 
         // Parse FP recovery rule (if present)
         let mut fp = None;
-        if data_words.len() >= offset + 1 {
+        if data_words.len() > offset {
             let fp_control = SFrameFlexControlData::new(*data_words.get(offset)?);
             if fp_control.is_padding() {
                 fp = Some(SFrameFlexRecoveryRule {
