@@ -17,6 +17,8 @@ fn main() {
 
         // Attempt to parse the input as SFrame data
         // The function should handle all inputs gracefully without panicking
-        let _ = SFrameSection::from(data, section_base);
+        if let Ok(section) = SFrameSection::from(data, section_base) {
+            let _ = section.to_string();
+        }
     });
 }

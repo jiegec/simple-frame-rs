@@ -266,6 +266,9 @@ impl<'a> SFrameSection<'a> {
         let fre_offset = self.freoff as usize
             + core::mem::size_of::<RawSFrameHeader>()
             + func_start_fre_off as usize;
+        if fre_offset + core::mem::size_of::<RawSFrameFDEAttr>() > self.data.len() {
+            return Err(SFrameError::UnexpectedEndOfData);
+        }
         let func_num_fres = read_struct!(
             RawSFrameFDEAttr,
             &self.data[fre_offset..],

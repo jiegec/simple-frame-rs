@@ -247,8 +247,12 @@ impl<'a> SFrameSection<'a> {
             }
             let mut iter = fde.iter_fre(self);
             while let Some(fre) = iter.next()? {
+                if fre.stack_offsets.is_empty() {
+                    continue;
+                }
+
                 let start_pc = match fde.func_info.get_fde_type()? {
-                    SFrameFDEType::PCInc => pc + fre.start_address.get() as u64,
+                    SFrameFDEType::PCInc => pc.wrapping_add(fre.start_address.get() as u64),
                     SFrameFDEType::PCMask => fre.start_address.get() as u64,
                 };
                 let base_reg = if fre.info.get_cfa_base_reg_id() == 0 {
