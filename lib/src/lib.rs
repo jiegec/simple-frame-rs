@@ -2,6 +2,9 @@
 //!
 //! Usage: Use [SFrameSection::from] to load sframe section content and access
 //! its content.
+//! 
+//! A version-agnostic API is provided at the crate level. You can use API from 
+//! v1/v2/v3 modules to parse sframe section of specific versions.
 //!
 //! Spec: <https://sourceware.org/binutils/docs/sframe-spec.html>
 
@@ -12,6 +15,7 @@ pub mod v1;
 pub mod v2;
 pub mod v3;
 
+/// Utility macro to read binary data from slice
 #[macro_export]
 macro_rules! read_binary {
     ($data: expr, $le: expr, $ty: ident, $offset: expr) => {{
@@ -26,6 +30,7 @@ macro_rules! read_binary {
     }};
 }
 
+/// Utility macro to read struct member from slice
 #[macro_export]
 macro_rules! read_struct {
     ($struct: ident, $data: expr, $le: expr, $x: ident, $ty: ident) => {{ read_binary!($data, $le, $ty, core::mem::offset_of!($struct, $x)) }};
