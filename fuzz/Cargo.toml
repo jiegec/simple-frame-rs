@@ -9,13 +9,5 @@ afl = "0.17"
 simple-frame-rs = { path = "../lib" }
 
 [[bin]]
-name = "parse_sframe"
-path = "fuzz_targets/parse_sframe.rs"
-
-[[bin]]
-name = "find_fde"
-path = "fuzz_targets/find_fde.rs"
-
-[[bin]]
-name = "find_fre"
-path = "fuzz_targets/find_fre.rs"
+name = "fuzzer"
+path = "fuzz_targets/fuzzer.rs"

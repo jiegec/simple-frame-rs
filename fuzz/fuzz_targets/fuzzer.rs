@@ -1,8 +1,7 @@
 use afl::fuzz;
 use simple_frame_rs::v2::SFrameSection;
 
-/// Fuzz target for SFrameFDE::find_fre()
-/// This tests finding FREs by PC within a function
+/// Fuzz target
 ///
 /// The fuzzer will generate two inputs concatenated:
 /// 1. First 8 bytes: PC address to search for
@@ -34,6 +33,12 @@ fn main() {
             Ok(section) => section,
             Err(_) => return, // Skip if parsing fails
         };
+
+        // Attempt to print to string
+        let _ = sframe.to_string();
+
+        // Attempt to find FDE by PC - should not panic on any PC value
+        let _ = sframe.find_fde(pc);
 
         // Test find_fre on all FDEs
         // This exercises the find_fre logic with various PCs and FDE configurations
