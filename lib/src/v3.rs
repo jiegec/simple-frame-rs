@@ -2,12 +2,10 @@
 //!
 //! Ref: <https://sourceware.org/binutils/docs-2.46/sframe-spec.html>
 
-use std::{cmp::Ordering, fmt::Write};
-
+use crate::{SFrameError, SFrameResult, read_binary, read_struct};
 use bitflags::bitflags;
 use fallible_iterator::FallibleIterator;
-
-use crate::{SFrameError, SFrameResult, read_binary, read_struct};
+use std::{cmp::Ordering, fmt::Write};
 
 /// SFrame ABI/arch Identifier
 ///

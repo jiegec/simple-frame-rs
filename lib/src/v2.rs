@@ -2,12 +2,10 @@
 //!
 //! Ref: <https://sourceware.org/binutils/docs-2.45/sframe-spec.html>
 
-use std::{cmp::Ordering, fmt::Write};
-
+use crate::{SFrameError, SFrameResult, read_binary, read_struct};
 use bitflags::bitflags;
 use fallible_iterator::FallibleIterator;
-
-use crate::{SFrameError, SFrameResult, read_binary, read_struct};
+use std::{cmp::Ordering, fmt::Write};
 
 /// SFrame ABI/arch Identifier
 ///
@@ -622,7 +620,7 @@ impl SFrameFDE {
                 let mut last: Option<SFrameFRE> = None;
                 let mut iter = self.iter_fre(section);
                 while let Some(fre) = iter.next()? {
-                    if fre.start_address.get() as u64 + fde_pc > pc {
+                    if pc >= fde_pc && fre.start_address.get() as u64 > pc - fde_pc {
                         // last is the matching one
                         break;
                     }
@@ -630,7 +628,7 @@ impl SFrameFDE {
                 }
                 if let Some(fre) = last {
                     // PC >= FRE_START_ADDR
-                    if fre.start_address.get() as u64 + fde_pc <= pc {
+                    if pc >= fde_pc && fre.start_address.get() as u64 <= pc - fde_pc {
                         return Ok(Some(fre));
                     }
                 }
