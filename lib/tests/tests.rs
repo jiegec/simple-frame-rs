@@ -2,7 +2,7 @@
 
 use fallible_iterator::FallibleIterator;
 use serde::{Deserialize, Serialize};
-use simple_frame_rs::{SFrameError, v2::*};
+use simple_frame_rs::{SFrameABI, SFrameError, SFrameSection};
 use std::iter::zip;
 
 // Test data from simple.json testcase
@@ -69,7 +69,7 @@ fn test_invalid_magic() {
 fn test_unsupported_version() {
     // Test with unsupported version
     let mut invalid_data = SIMPLE_SFRAME_DATA.clone();
-    invalid_data[2] = 3; // Unsupported version
+    invalid_data[2] = 255; // Unsupported version
     let section_base = 8416;
 
     let result = SFrameSection::from(&invalid_data, section_base);
@@ -127,6 +127,7 @@ fn test_fde_access() {
 #[test]
 fn test_sframe_flags() {
     // Test SFrameFlags functionality
+    use simple_frame_rs::v3::SFrameFlags;
     let flags = SFrameFlags::SFRAME_F_FDE_SORTED | SFrameFlags::SFRAME_F_FRAME_POINTER;
     assert!(flags.contains(SFrameFlags::SFRAME_F_FDE_SORTED));
     assert!(flags.contains(SFrameFlags::SFRAME_F_FRAME_POINTER));
@@ -182,7 +183,10 @@ fn test_to_string_format() {
 fn test_fre_iteration() {
     // Test FRE iteration and access
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Get first FDE and iterate its FREs
     let fde = section.get_fde(0).unwrap().unwrap();
@@ -206,7 +210,10 @@ fn test_fre_iteration() {
 fn test_fde_iteration() {
     // Test FDE iteration
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     let mut fde_iter = section.iter_fde();
     let mut count = 0;
@@ -223,7 +230,10 @@ fn test_fde_iteration() {
 fn test_find_fde() {
     // Test finding FDE by PC
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Test PC within function range
     let fde = section.find_fde(0x1020).unwrap();
@@ -248,7 +258,10 @@ fn test_find_fde() {
 fn test_find_fre() {
     // Test finding FRE by PC
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Get first FDE
     let fde = section.get_fde(0).unwrap().unwrap();
@@ -281,7 +294,10 @@ fn test_find_fre() {
 fn test_sframe_fre_methods() {
     // Test SFrameFRE helper methods
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Get first FDE and first FRE
     let fde = section.get_fde(0).unwrap().unwrap();
@@ -305,8 +321,12 @@ fn test_sframe_fre_methods() {
 #[test]
 fn test_sframe_fde_info() {
     // Test SFrameFDEInfo parsing
+    use simple_frame_rs::v2::{SFrameFDEType, SFrameFREType};
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Get FDEs and test their info
     for i in 0..section.get_fde_count() {
@@ -331,7 +351,10 @@ fn test_sframe_fde_info() {
 fn test_sframe_fre_info() {
     // Test SFrameFREInfo parsing
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Get first FDE and first FRE
     let fde = section.get_fde(0).unwrap().unwrap();
@@ -361,7 +384,10 @@ fn test_aarch64_sframe() {
     let aarch64_data = std::fs::read("testcases/simple-aarch64.json").unwrap();
     let testcase: Testcase = serde_json::from_slice(&aarch64_data).unwrap();
 
-    let section = SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
+    let section = SFrameSection::from(&testcase.content, testcase.section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Verify AArch64 ABI
     assert!(matches!(section.get_abi(), SFrameABI::AArch64LittleEndian));
@@ -388,7 +414,10 @@ fn test_complex_sframe() {
     let complex_data = std::fs::read("testcases/complex.json").unwrap();
     let testcase: Testcase = serde_json::from_slice(&complex_data).unwrap();
 
-    let section = SFrameSection::from(&testcase.content, testcase.section_base).unwrap();
+    let section = SFrameSection::from(&testcase.content, testcase.section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Verify complex section
     assert_eq!(section.get_fde_count(), 6);
@@ -426,8 +455,12 @@ fn test_error_conditions() {
 #[test]
 fn test_fre_start_address_types() {
     // Test different FRE start address types
+    use simple_frame_rs::v2::SFrameFREStartAddress;
     let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+        .unwrap()
+        .as_v2()
+        .unwrap();
 
     // Test Addr0 type (used in test data)
     let fde = section.get_fde(0).unwrap().unwrap();

@@ -5,6 +5,7 @@
 //!
 //! Spec: <https://sourceware.org/binutils/docs/sframe-spec.html>
 
+use fallible_iterator::FallibleIterator;
 use thiserror::Error;
 
 pub mod v1;
@@ -32,6 +33,21 @@ macro_rules! read_struct {
 
 /// Result type for the crate
 pub type SFrameResult<T> = core::result::Result<T, SFrameError>;
+
+/// SFrame ABI/arch Identifier
+///
+/// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-ABI_002farch-Identifier>
+#[derive(Debug, Clone, Copy)]
+pub enum SFrameABI {
+    /// SFRAME_ABI_AARCH64_ENDIAN_BIG
+    AArch64BigEndian,
+    /// SFRAME_ABI_AARCH64_ENDIAN_LITTLE
+    AArch64LittleEndian,
+    /// SFRAME_ABI_AMD64_ENDIAN_LITTLE
+    AMD64LittleEndian,
+    /// SFRAME_ABI_S390X_ENDIAN_BIG, since SFrame V2
+    S390XBigEndian,
+}
 
 /// SFrame section
 ///
@@ -66,6 +82,25 @@ impl<'a> SFrameSection<'a> {
             SFrameSection::V3(sframe_section) => sframe_section.to_string(),
         }
     }
+
+    /// Get the count of FDE entries
+    pub fn get_fde_count(&self) -> u32 {
+        match self {
+            SFrameSection::V1(sframe_section) => sframe_section.get_fde_count(),
+            SFrameSection::V2(sframe_section) => sframe_section.get_fde_count(),
+            SFrameSection::V3(sframe_section) => sframe_section.get_fde_count(),
+        }
+    }
+
+    /// Get SFrame ABI
+    pub fn get_abi(&self) -> SFrameABI {
+        match self {
+            SFrameSection::V1(sframe_section) => sframe_section.get_abi(),
+            SFrameSection::V2(sframe_section) => sframe_section.get_abi(),
+            SFrameSection::V3(sframe_section) => sframe_section.get_abi(),
+        }
+    }
+
     /// Parse SFrame section from data
     pub fn from(data: &'a [u8], section_base: u64) -> SFrameResult<SFrameSection<'a>> {
         // parse sframe_header
@@ -105,6 +140,7 @@ impl<'a> SFrameSection<'a> {
         }
     }
 
+    /// Find FDE entry by pc
     pub fn find_fde(&self, pc: u64) -> SFrameResult<Option<SFrameFDE>> {
         match self {
             SFrameSection::V1(sframe_section) => {
@@ -116,6 +152,45 @@ impl<'a> SFrameSection<'a> {
             SFrameSection::V3(sframe_section) => {
                 Ok(sframe_section.find_fde(pc)?.map(SFrameFDE::V3))
             }
+        }
+    }
+
+    /// Access FDE by index
+    pub fn get_fde(&self, index: u32) -> SFrameResult<Option<SFrameFDE>> {
+        match self {
+            SFrameSection::V1(sframe_section) => {
+                Ok(sframe_section.get_fde(index)?.map(SFrameFDE::V1))
+            }
+            SFrameSection::V2(sframe_section) => {
+                Ok(sframe_section.get_fde(index)?.map(SFrameFDE::V2))
+            }
+            SFrameSection::V3(sframe_section) => {
+                Ok(sframe_section.get_fde(index)?.map(SFrameFDE::V3))
+            }
+        }
+    }
+
+    /// Get underlying SFrameSection for sframe v1
+    pub fn as_v1(self) -> Option<v1::SFrameSection<'a>> {
+        match self {
+            SFrameSection::V1(sframe_section) => Some(sframe_section),
+            _ => None,
+        }
+    }
+
+    /// Get underlying SFrameSection for sframe v2
+    pub fn as_v2(self) -> Option<v2::SFrameSection<'a>> {
+        match self {
+            SFrameSection::V2(sframe_section) => Some(sframe_section),
+            _ => None,
+        }
+    }
+
+    /// Get underlying SFrameSection for sframe v3
+    pub fn as_v3(self) -> Option<v3::SFrameSection<'a>> {
+        match self {
+            SFrameSection::V3(sframe_section) => Some(sframe_section),
+            _ => None,
         }
     }
 }
@@ -149,6 +224,51 @@ impl SFrameFDE {
                 Ok(sframe_fde.find_fre(sframe_section, pc)?.map(SFrameFRE::V3))
             }
             _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+
+    /// Iterate FRE entries
+    pub fn iter_fre<'a>(
+        &'a self,
+        section: &'a SFrameSection<'a>,
+    ) -> SFrameResult<SFrameFREIterator<'a>> {
+        match (self, section) {
+            (SFrameFDE::V1(sframe_fde), SFrameSection::V1(sframe_section)) => {
+                Ok(SFrameFREIterator::V1(sframe_fde.iter_fre(sframe_section)))
+            }
+            (SFrameFDE::V2(sframe_fde), SFrameSection::V2(sframe_section)) => {
+                Ok(SFrameFREIterator::V2(sframe_fde.iter_fre(sframe_section)))
+            }
+            (SFrameFDE::V3(sframe_fde), SFrameSection::V3(sframe_section)) => {
+                Ok(SFrameFREIterator::V3(sframe_fde.iter_fre(sframe_section)))
+            }
+            _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+}
+
+/// Iterator for SFrame FRE
+pub enum SFrameFREIterator<'a> {
+    V1(v1::SFrameFREIterator<'a>),
+    V2(v2::SFrameFREIterator<'a>),
+    V3(v3::SFrameFREIterator<'a>),
+}
+
+impl<'a> FallibleIterator for SFrameFREIterator<'a> {
+    type Item = SFrameFRE;
+    type Error = SFrameError;
+
+    fn next(&mut self) -> SFrameResult<Option<SFrameFRE>> {
+        match self {
+            SFrameFREIterator::V1(sframe_fre_iter) => {
+                Ok(sframe_fre_iter.next()?.map(SFrameFRE::V1))
+            }
+            SFrameFREIterator::V2(sframe_fre_iter) => {
+                Ok(sframe_fre_iter.next()?.map(SFrameFRE::V2))
+            }
+            SFrameFREIterator::V3(sframe_fre_iter) => {
+                Ok(sframe_fre_iter.next()?.map(SFrameFRE::V3))
+            }
         }
     }
 }
@@ -219,6 +339,30 @@ impl SFrameFRE {
                 Ok(sframe_fre.get_fp_offset(sframe_section))
             }
             _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+
+    /// Get underlying SFrameFRE for sframe v1
+    pub fn as_v1(self) -> Option<v1::SFrameFRE> {
+        match self {
+            SFrameFRE::V1(sframe_fre) => Some(sframe_fre),
+            _ => None,
+        }
+    }
+
+    /// Get underlying SFrameFRE for sframe v2
+    pub fn as_v2(self) -> Option<v2::SFrameFRE> {
+        match self {
+            SFrameFRE::V2(sframe_fre) => Some(sframe_fre),
+            _ => None,
+        }
+    }
+
+    /// Get underlying SFrameFRE for sframe v3
+    pub fn as_v3(self) -> Option<v3::SFrameFRE> {
+        match self {
+            SFrameFRE::V3(sframe_fre) => Some(sframe_fre),
+            _ => None,
         }
     }
 }

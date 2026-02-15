@@ -2,23 +2,10 @@
 //!
 //! Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html>
 
-use crate::{SFrameError, SFrameResult, read_binary, read_struct};
+use crate::{SFrameABI, SFrameError, SFrameResult, read_binary, read_struct};
 use bitflags::bitflags;
 use fallible_iterator::FallibleIterator;
 use std::{cmp::Ordering, fmt::Write};
-
-/// SFrame ABI/arch Identifier
-///
-/// Ref: <https://sourceware.org/binutils/docs-2.40/sframe-spec.html#SFrame-ABI_002farch-Identifier>
-#[derive(Debug, Clone, Copy)]
-pub enum SFrameABI {
-    /// SFRAME_ABI_AARCH64_ENDIAN_BIG
-    AArch64BigEndian,
-    /// SFRAME_ABI_AARCH64_ENDIAN_LITTLE
-    AArch64LittleEndian,
-    /// SFRAME_ABI_AMD64_ENDIAN_LITTLE
-    AMD64LittleEndian,
-}
 
 bitflags! {
     /// SFrame Flags
