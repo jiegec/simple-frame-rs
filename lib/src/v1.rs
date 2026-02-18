@@ -569,7 +569,7 @@ impl SFrameFDE {
                 while let Some(fre) = iter.next()? {
                     // Unwinders perform a (PC & FRE_START_ADDR_AS_MASK >= FRE_START_ADDR_AS_MASK) to look up a matching FRE.
                     if fre.start_address.get() != 0
-                        && pc % fre.start_address.get() as u64 >= fre.start_address.get() as u64
+                        && (pc & fre.start_address.get() as u64) >= fre.start_address.get() as u64
                     {
                         // found
                         return Ok(Some(fre));
