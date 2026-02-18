@@ -31,20 +31,12 @@ use std::iter::zip;
 //   000000000000112a  sp+16     c-16      f
 //   000000000000112d  fp+16     c-16      f
 //   0000000000001133  sp+8      c-16      f
-const SIMPLE_SFRAME_DATA: [u8; 112] = [
-    226, 222, 2, 1, 3, 0, 248, 0, 3, 0, 0, 0, 7, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 64,
-    239, 255, 255, 16, 0, 0, 0, 15, 0, 0, 0, 2, 0, 0, 0, 0, 16, 0, 0, 80, 239, 255, 255, 8, 0, 0,
-    0, 21, 0, 0, 0, 1, 0, 0, 0, 16, 8, 0, 0, 73, 240, 255, 255, 11, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0,
-    0, 0, 0, 0, 0, 0, 3, 8, 1, 5, 16, 240, 4, 4, 16, 240, 10, 5, 8, 240, 0, 3, 16, 6, 3, 24, 0, 3,
-    16,
-];
 
 #[test]
 fn test_sframe_section_creation() {
     // Test valid SFrame section creation
-    let section_base = 8416;
-
-    let result = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base);
+    let simple = get_testcase("testcases/simple.json");
+    let result = SFrameSection::from(&simple.content, simple.section_base);
     assert!(result.is_ok());
 
     let section = result.unwrap();
@@ -55,12 +47,12 @@ fn test_sframe_section_creation() {
 #[test]
 fn test_invalid_magic() {
     // Test with invalid magic number
-    let mut invalid_data = SIMPLE_SFRAME_DATA.clone();
+    let simple = get_testcase("testcases/simple.json");
+    let mut invalid_data = simple.content.clone();
     invalid_data[0] = 0; // Corrupt magic
     invalid_data[1] = 0;
-    let section_base = 8416;
 
-    let result = SFrameSection::from(&invalid_data, section_base);
+    let result = SFrameSection::from(&invalid_data, simple.section_base);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), SFrameError::InvalidMagic));
 }
@@ -68,11 +60,11 @@ fn test_invalid_magic() {
 #[test]
 fn test_unsupported_version() {
     // Test with unsupported version
-    let mut invalid_data = SIMPLE_SFRAME_DATA.clone();
+    let simple = get_testcase("testcases/simple.json");
+    let mut invalid_data = simple.content.clone();
     invalid_data[2] = 255; // Unsupported version
-    let section_base = 8416;
 
-    let result = SFrameSection::from(&invalid_data, section_base);
+    let result = SFrameSection::from(&invalid_data, simple.section_base);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
@@ -83,11 +75,11 @@ fn test_unsupported_version() {
 #[test]
 fn test_unsupported_abi() {
     // Test with unsupported ABI
-    let mut invalid_data = SIMPLE_SFRAME_DATA.clone();
+    let simple = get_testcase("testcases/simple.json");
+    let mut invalid_data = simple.content.clone();
     invalid_data[4] = 99; // Unsupported ABI (byte 4 is abi_arch)
-    let section_base = 8416;
 
-    let result = SFrameSection::from(&invalid_data, section_base);
+    let result = SFrameSection::from(&invalid_data, simple.section_base);
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), SFrameError::UnsupportedABI));
 }
@@ -95,10 +87,10 @@ fn test_unsupported_abi() {
 #[test]
 fn test_insufficient_data() {
     // Test with insufficient data
-    let data = &SIMPLE_SFRAME_DATA[0..10]; // Only partial data
-    let section_base = 8416;
+    let simple = get_testcase("testcases/simple.json");
+    let data = &simple.content[0..10]; // Only partial data
 
-    let result = SFrameSection::from(data, section_base);
+    let result = SFrameSection::from(data, simple.section_base);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
@@ -109,9 +101,9 @@ fn test_insufficient_data() {
 #[test]
 fn test_fde_access() {
     // Test accessing FDE entries
-    let section_base = 8416;
+    let simple = get_testcase("testcases/simple.json");
 
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&simple.content, simple.section_base).unwrap();
 
     // Test valid FDE access
     let fde_result = section.get_fde(0);
@@ -164,9 +156,9 @@ fn test_sframe_abi_conversion() {
 #[test]
 fn test_to_string_format() {
     // Test the to_string method produces expected format
-    let section_base = 8416;
+    let simple = get_testcase("testcases/simple.json");
 
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base).unwrap();
+    let section = SFrameSection::from(&simple.content, simple.section_base).unwrap();
     let result = section.to_string();
 
     assert!(result.is_ok());
@@ -182,8 +174,8 @@ fn test_to_string_format() {
 #[test]
 fn test_fre_iteration() {
     // Test FRE iteration and access
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -209,8 +201,8 @@ fn test_fre_iteration() {
 #[test]
 fn test_fde_iteration() {
     // Test FDE iteration
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -229,8 +221,8 @@ fn test_fde_iteration() {
 #[test]
 fn test_find_fde() {
     // Test finding FDE by PC
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -257,8 +249,8 @@ fn test_find_fde() {
 #[test]
 fn test_find_fre() {
     // Test finding FRE by PC
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -293,8 +285,8 @@ fn test_find_fre() {
 #[test]
 fn test_sframe_fre_methods() {
     // Test SFrameFRE helper methods
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -322,8 +314,8 @@ fn test_sframe_fre_methods() {
 fn test_sframe_fde_info() {
     // Test SFrameFDEInfo parsing
     use simple_frame_rs::v2::{SFrameFDEType, SFrameFREType};
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -350,8 +342,8 @@ fn test_sframe_fde_info() {
 #[test]
 fn test_sframe_fre_info() {
     // Test SFrameFREInfo parsing
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let simple = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&simple.content, simple.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -381,8 +373,7 @@ fn test_sframe_fre_info() {
 #[test]
 fn test_aarch64_sframe() {
     // Test AArch64 SFrame parsing
-    let aarch64_data = std::fs::read("testcases/simple-aarch64.json").unwrap();
-    let testcase: Testcase = serde_json::from_slice(&aarch64_data).unwrap();
+    let testcase = get_testcase("testcases/simple-aarch64.json");
 
     let section = SFrameSection::from(&testcase.content, testcase.section_base)
         .unwrap()
@@ -411,8 +402,7 @@ fn test_aarch64_sframe() {
 #[test]
 fn test_complex_sframe() {
     // Test complex SFrame with multiple functions
-    let complex_data = std::fs::read("testcases/complex.json").unwrap();
-    let testcase: Testcase = serde_json::from_slice(&complex_data).unwrap();
+    let testcase = get_testcase("testcases/complex.json");
 
     let section = SFrameSection::from(&testcase.content, testcase.section_base)
         .unwrap()
@@ -442,9 +432,10 @@ fn test_complex_sframe() {
 #[test]
 fn test_error_conditions() {
     // Test various error conditions
+    let testcase = get_testcase("testcases/simple.json");
 
     // Test invalid flags
-    let mut invalid_data = SIMPLE_SFRAME_DATA.clone();
+    let mut invalid_data = testcase.content.clone();
     invalid_data[3] = 0xFF; // Invalid flags
     let section_base = 8416;
     let result = SFrameSection::from(&invalid_data, section_base);
@@ -456,8 +447,8 @@ fn test_error_conditions() {
 fn test_fre_start_address_types() {
     // Test different FRE start address types
     use simple_frame_rs::v2::SFrameFREStartAddress;
-    let section_base = 8416;
-    let section = SFrameSection::from(&SIMPLE_SFRAME_DATA, section_base)
+    let testcase = get_testcase("testcases/simple.json");
+    let section = SFrameSection::from(&testcase.content, testcase.section_base)
         .unwrap()
         .as_v2()
         .unwrap();
@@ -479,6 +470,12 @@ struct Testcase {
     section_base: u64,
     content: Vec<u8>,
     groundtruth: String,
+}
+
+fn get_testcase(path: &str) -> Testcase {
+    // Test complex SFrame with multiple functions
+    let complex_data = std::fs::read(path).unwrap();
+    serde_json::from_slice(&complex_data).unwrap()
 }
 
 #[test]
