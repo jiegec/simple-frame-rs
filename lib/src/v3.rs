@@ -999,6 +999,11 @@ impl SFrameFRE {
     /// - A DWARF register number (encoded as (regnum << 1) | 1) if the LSB is 1
     /// - SFRAME_FRE_RA_OFFSET_INVALID (0) if RA is not saved
     pub fn get_ra_offset(&self, section: &SFrameSection<'_>) -> Option<i32> {
+        // check if ra undefined
+        if self.stack_offsets.is_empty() {
+            return None;
+        }
+
         match section.abi {
             // the second offset for aarch64
             SFrameABI::AArch64BigEndian | SFrameABI::AArch64LittleEndian => {

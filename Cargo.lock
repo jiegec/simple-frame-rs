@@ -395,6 +395,7 @@ dependencies = [
  "bitflags",
  "fallible-iterator",
  "libc",
+ "libsframe-sys",
  "object",
  "serde",
  "serde_json",

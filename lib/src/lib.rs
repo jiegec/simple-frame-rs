@@ -46,7 +46,7 @@ pub type SFrameResult<T> = core::result::Result<T, SFrameError>;
 /// SFrame ABI/arch Identifier
 ///
 /// Ref: <https://sourceware.org/binutils/docs/sframe-spec.html#SFrame-ABI_002farch-Identifier>
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SFrameABI {
     /// SFRAME_ABI_AARCH64_ENDIAN_BIG
     AArch64BigEndian,
@@ -361,6 +361,36 @@ impl SFrameFDE {
                 Ok(SFrameFREIterator::V3(sframe_fde.iter_fre(sframe_section)))
             }
             _ => Err(SFrameError::UnsupportedVersion),
+        }
+    }
+
+    /// Get corresponding function size
+    pub fn get_func_size(&self) -> u32 {
+        match self {
+            SFrameFDE::V1(sframe_fde) => {
+                sframe_fde.func_size
+            }
+            SFrameFDE::V2(sframe_fde) => {
+                sframe_fde.func_size
+            }
+            SFrameFDE::V3(sframe_fde) => {
+                sframe_fde.func_size
+            }
+        }
+    }
+
+    /// Get number of SFrameFRE
+    pub fn get_num_fres(&self) -> u32 {
+        match self {
+            SFrameFDE::V1(sframe_fde) => {
+                sframe_fde.func_num_fres
+            }
+            SFrameFDE::V2(sframe_fde) => {
+                sframe_fde.func_num_fres
+            }
+            SFrameFDE::V3(sframe_fde) => {
+                sframe_fde.func_num_fres as u32
+            }
         }
     }
 }
