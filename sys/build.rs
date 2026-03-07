@@ -35,7 +35,7 @@ fn main() {
         .header(include_path.join("sframe-api.h").to_str().unwrap())
         .clang_arg(format!("-I{}", include_path.display()))
         // Whitelist sframe-related items
-        .allowlist_function(".*")
+        .allowlist_function(".*sframe.*")
         .allowlist_type("sframe_.*")
         .allowlist_var("SFRAME_.*")
         .generate()
