@@ -2,7 +2,7 @@
 //!
 //! Ref: <https://sourceware.org/binutils/docs-2.45/sframe-spec.html>
 
-use crate::{SFrameABI, SFrameError, SFrameResult, read_binary, read_struct};
+use crate::{read_binary, read_struct, SFrameABI, SFrameError, SFrameResult};
 use bitflags::bitflags;
 use fallible_iterator::FallibleIterator;
 use std::{cmp::Ordering, fmt::Write};
@@ -151,11 +151,10 @@ impl<'a> SFrameSection<'a> {
         // initial validation
         let num_fdes = read_struct!(RawSFrameHeader, data, little_endian, sfh_num_fdes, u32);
         let fdeoff = read_struct!(RawSFrameHeader, data, little_endian, sfh_fdeoff, u32);
-        if data.len() - core::mem::size_of::<RawSFrameHeader>() < fdeoff as usize {
-            return Err(SFrameError::UnexpectedEndOfData);
-        } else if (data.len() - core::mem::size_of::<RawSFrameHeader>() - fdeoff as usize)
-            / core::mem::size_of::<RawSFrameFDE>()
-            < num_fdes as usize
+        if data.len() - core::mem::size_of::<RawSFrameHeader>() < fdeoff as usize
+            || (data.len() - core::mem::size_of::<RawSFrameHeader>() - fdeoff as usize)
+                / core::mem::size_of::<RawSFrameFDE>()
+                < num_fdes as usize
         {
             return Err(SFrameError::UnexpectedEndOfData);
         }
