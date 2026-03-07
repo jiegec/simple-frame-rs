@@ -1,0 +1,3 @@
+[submodule "sys/binutils-gdb"]
+	path = sys/binutils-gdb
+	url = https://sourceware.org/git/binutils-gdb.git

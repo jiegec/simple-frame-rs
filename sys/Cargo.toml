@@ -1,0 +1,16 @@
+[package]
+name = "libsframe-sys"
+version = "0.1.0"
+authors = ["Jiajie Chen <c@jia.je>"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/jiegec/simple-frame-rs"
+description = "FFI bindings for libsframe from binutils-gdb"
+links = "sframe"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.72.1"
+cc = "1.2"
